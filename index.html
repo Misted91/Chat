@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Groupes de discussion</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- Barre latérale : liste des groupes -->
+    <aside class="sidebar">
+      <header class="sidebar__head">
+        <h1>Groupes</h1>
+        <div class="user" id="user-zone">
+          <!-- Emplacement réservé pour l'authentification Google (Firebase) -->
+          <span class="user__name" id="user-name">Invité</span>
+        </div>
+      </header>
+
+      <form class="new-group" id="new-group-form">
+        <input
+          type="text"
+          id="new-group-input"
+          placeholder="Nom du nouveau groupe…"
+          autocomplete="off"
+          maxlength="40"
+        />
+        <button type="submit" aria-label="Créer le groupe">+</button>
+      </form>
+
+      <ul class="group-list" id="group-list"></ul>
+    </aside>
+
+    <!-- Zone de conversation -->
+    <main class="chat">
+      <header class="chat__head" id="chat-head">
+        <h2 id="chat-title">Sélectionne un groupe</h2>
+        <button class="btn-danger" id="delete-group" hidden>Supprimer</button>
+      </header>
+
+      <div class="messages" id="messages"></div>
+
+      <form class="composer" id="composer" hidden>
+        <input
+          type="text"
+          id="message-input"
+          placeholder="Écris un message…"
+          autocomplete="off"
+        />
+        <button type="submit">Envoyer</button>
+      </form>
+    </main>
+  </div>
+
+  <!-- Couche de données (remplaçable par Firebase plus tard) -->
+  <script src="store.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
