@@ -33,6 +33,15 @@ const messagesEl = document.getElementById('messages');
 const composer = document.getElementById('composer');
 const messageInput = document.getElementById('message-input');
 
+// --- Diagnostic visible à l'écran ---
+const statusEl = document.getElementById('status');
+function logStatus(msg) {
+  const time = new Date().toLocaleTimeString('fr-FR');
+  console.log('[diag]', msg);
+  if (statusEl) statusEl.textContent += `${time} — ${msg}\n`;
+}
+logStatus('Page chargée. En attente…');
+
 // --- Authentification ---
 function authErrorMessage(err) {
   if (err.code === 'auth/operation-not-allowed') {
@@ -47,22 +56,32 @@ function authErrorMessage(err) {
 }
 
 // Récupère le retour d'une éventuelle connexion par redirection.
-handleRedirectResult().catch((err) => {
-  console.error(err);
-  alert('Connexion impossible : ' + authErrorMessage(err));
-});
-
-loginBtn.addEventListener('click', () => {
-  loginWithGoogle().catch((err) => {
+handleRedirectResult()
+  .then((res) => {
+    if (res && res.user) logStatus('Retour redirection : ' + res.user.email);
+  })
+  .catch((err) => {
     console.error(err);
-    alert('Connexion impossible : ' + authErrorMessage(err));
+    logStatus('Erreur redirection : ' + err.code);
   });
+
+loginBtn.addEventListener('click', async () => {
+  logStatus('Clic connexion… ouverture du popup Google');
+  try {
+    const res = await loginWithGoogle();
+    logStatus('Popup OK : connecté en tant que ' + res.user.email);
+  } catch (err) {
+    console.error(err);
+    logStatus('ÉCHEC popup : ' + err.code);
+    alert('Connexion impossible : ' + authErrorMessage(err));
+  }
 });
 
 logoutBtn.addEventListener('click', () => logout());
 
 watchAuth((user) => {
   currentUser = user;
+  logStatus('État auth : ' + (user ? 'CONNECTÉ (' + user.email + ')' : 'déconnecté'));
   if (user) {
     loginOverlay.hidden = true;
     userName.textContent = user.displayName || 'Utilisateur';

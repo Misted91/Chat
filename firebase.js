@@ -14,6 +14,8 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   getRedirectResult,
+  setPersistence,
+  browserLocalPersistence,
   signOut,
   onAuthStateChanged,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
@@ -45,7 +47,9 @@ const provider = new GoogleAuthProvider();
 //
 // (La connexion par redirection est volontairement écartée : elle échoue
 // silencieusement en cross-domaine à cause du cloisonnement du stockage.)
-export function loginWithGoogle() {
+export async function loginWithGoogle() {
+  // Garde la session connectée d'un chargement de page à l'autre.
+  await setPersistence(auth, browserLocalPersistence);
   return signInWithPopup(auth, provider);
 }
 
