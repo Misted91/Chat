@@ -55,6 +55,71 @@ html, body {
   color: var(--muted);
 }
 
+.user__avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logout {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.logout:hover { color: var(--text); border-color: var(--muted); }
+
+/* ---------- Écran de connexion ---------- */
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.login-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px 34px;
+  max-width: 380px;
+  width: 100%;
+  text-align: center;
+}
+.login-card h1 { margin: 0 0 8px; font-size: 24px; }
+.login-card p { margin: 0 0 26px; color: var(--muted); }
+
+.google-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: white;
+  color: #202124;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 18px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.google-btn:hover { background: #f1f3f4; }
+
 .new-group {
   display: flex;
   gap: 8px;

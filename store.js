@@ -1,67 +1,70 @@
 /*
- * Couche de données (Store).
+ * Couche de données — Firestore.
  * -------------------------------------------------------------
- * Pour l'instant tout est stocké dans le localStorage du navigateur.
- * Cette classe expose une API simple (getGroups, addGroup, addMessage…)
- * qu'il suffira de réimplémenter avec Firebase/Firestore plus tard,
- * SANS toucher à app.js.
+ * Modèle de données :
+ *   groups (collection)
+ *     └─ {groupId} : { name, createdAt, createdBy, createdByName }
+ *          └─ messages (sous-collection)
+ *               └─ {msgId} : { author, authorName, text, ts }
  *
- * Voir README.md, section « Brancher Firebase ».
+ * Les méthodes "watch*" ouvrent un abonnement temps réel (onSnapshot)
+ * et renvoient une fonction de désabonnement.
  */
-const Store = (() => {
-  const KEY = 'chat-groups-v1';
+import { db } from './firebase.js';
+import {
+  collection,
+  doc,
+  addDoc,
+  deleteDoc,
+  onSnapshot,
+  query,
+  orderBy,
+  serverTimestamp,
+} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
-  function _read() {
-    try {
-      return JSON.parse(localStorage.getItem(KEY)) || [];
-    } catch {
-      return [];
-    }
-  }
+export const Store = {
+  /** Abonnement temps réel à la liste des groupes. */
+  watchGroups(callback) {
+    const q = query(collection(db, 'groups'), orderBy('createdAt', 'asc'));
+    return onSnapshot(q, (snap) => {
+      const groups = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      callback(groups);
+    });
+  },
 
-  function _write(groups) {
-    localStorage.setItem(KEY, JSON.stringify(groups));
-  }
+  /** Abonnement temps réel aux messages d'un groupe. */
+  watchMessages(groupId, callback) {
+    const q = query(
+      collection(db, 'groups', groupId, 'messages'),
+      orderBy('ts', 'asc')
+    );
+    return onSnapshot(q, (snap) => {
+      const messages = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      callback(messages);
+    });
+  },
 
-  function _uid() {
-    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-  }
+  async addGroup(name, user) {
+    return addDoc(collection(db, 'groups'), {
+      name: name.trim(),
+      createdAt: serverTimestamp(),
+      createdBy: user.uid,
+      createdByName: user.displayName || 'Anonyme',
+    });
+  },
 
-  return {
-    /** @returns {Array<{id,name,messages:Array}>} */
-    getGroups() {
-      return _read();
-    },
+  async deleteGroup(groupId) {
+    // Note : supprime le document groupe. Les sous-collections de messages
+    // doivent être nettoyées via une Cloud Function pour un vrai ménage.
+    return deleteDoc(doc(db, 'groups', groupId));
+  },
 
-    getGroup(id) {
-      return _read().find((g) => g.id === id) || null;
-    },
-
-    addGroup(name) {
-      const groups = _read();
-      const group = { id: _uid(), name: name.trim(), messages: [] };
-      groups.push(group);
-      _write(groups);
-      return group;
-    },
-
-    deleteGroup(id) {
-      _write(_read().filter((g) => g.id !== id));
-    },
-
-    addMessage(groupId, { author, text }) {
-      const groups = _read();
-      const group = groups.find((g) => g.id === groupId);
-      if (!group) return null;
-      const message = {
-        id: _uid(),
-        author,
-        text: text.trim(),
-        ts: Date.now(),
-      };
-      group.messages.push(message);
-      _write(groups);
-      return message;
-    },
-  };
-})();
+  async addMessage(groupId, { text, user }) {
+    return addDoc(collection(db, 'groups', groupId, 'messages'), {
+      text: text.trim(),
+      author: user.uid,
+      authorName: user.displayName || 'Anonyme',
+      ts: serverTimestamp(),
+    });
+  },
+};

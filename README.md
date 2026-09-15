@@ -1,20 +1,30 @@
 # Groupes de discussion
 
-Un petit site pour **créer des groupes de conversation** et échanger des messages
-dans chaque groupe. Aucune installation : ouvre simplement `index.html` dans un
-navigateur.
+Un site pour **créer des groupes de conversation** et discuter en temps réel,
+avec **connexion Google** et données stockées dans **Firebase (Firestore)**.
 
 ## Utilisation
 
-1. Ouvre `index.html` (double-clic, ou via un petit serveur local — voir plus bas).
-2. Tape un nom dans le champ « Nom du nouveau groupe… » puis clique sur **+**.
-3. Clique sur un groupe pour l'ouvrir, écris un message et **Envoyer**.
-4. Le bouton **Supprimer** retire le groupe sélectionné.
+1. Connecte-toi avec Google.
+2. Crée un groupe (champ + bouton **+** à gauche).
+3. Ouvre un groupe, écris un message, **Envoyer** — les messages arrivent en
+   temps réel pour tous les membres connectés.
+4. Le créateur d'un groupe peut le **supprimer**.
 
-Les données sont pour l'instant enregistrées dans le navigateur (localStorage) :
-elles restent d'une visite à l'autre, mais uniquement sur ta machine.
+## À activer une seule fois dans la console Firebase
 
-### Lancer avec un serveur local (recommandé)
+Console : <https://console.firebase.google.com> → projet **chat-fd96b**
+
+1. **Authentication → Sign-in method → Google** : activer.
+2. **Firestore Database → Créer une base** (mode production).
+3. **Firestore Database → Règles** : coller le contenu de `firestore.rules`.
+4. **Authentication → Settings → Domaines autorisés** : `localhost` est déjà
+   autorisé. Ajoute le domaine si tu héberges le site ailleurs (ex. GitHub Pages,
+   Firebase Hosting).
+
+## Lancer en local
+
+Firebase Auth (popup Google) exige un vrai serveur, pas un simple `file://` :
 
 ```bash
 python3 -m http.server 8000
@@ -23,27 +33,24 @@ python3 -m http.server 8000
 
 ## Structure du projet
 
-| Fichier      | Rôle                                                        |
-|--------------|-------------------------------------------------------------|
-| `index.html` | Structure de la page                                        |
-| `styles.css` | Mise en forme                                               |
-| `app.js`     | Logique de l'interface (groupes, messages)                  |
-| `store.js`   | **Couche de données** — à remplacer par Firebase plus tard  |
+| Fichier            | Rôle                                                    |
+|--------------------|---------------------------------------------------------|
+| `index.html`       | Structure de la page + écran de connexion               |
+| `styles.css`       | Mise en forme                                           |
+| `app.js`           | Logique de l'interface (auth, groupes, messages)        |
+| `firebase.js`      | Initialisation Firebase + helpers d'authentification    |
+| `store.js`         | Couche de données Firestore (temps réel)                |
+| `firestore.rules`  | Règles de sécurité à coller dans la console             |
 
-## Brancher Firebase + connexion Google (étape suivante)
+## Modèle de données (Firestore)
 
-Le code est déjà organisé pour ça : toute la lecture/écriture passe par `store.js`.
-Pour ajouter Firebase, il suffira de :
+```
+groups (collection)
+  └─ {groupId} : { name, createdAt, createdBy, createdByName }
+       └─ messages (sous-collection)
+            └─ {msgId} : { author, authorName, text, ts }
+```
 
-1. Créer un projet sur [console.firebase.google.com](https://console.firebase.google.com).
-2. Activer **Authentication → Google** et **Firestore Database**.
-3. Ajouter le SDK Firebase dans `index.html` et remplacer l'implémentation
-   `localStorage` de `store.js` par des appels Firestore (`collection`, `addDoc`,
-   `onSnapshot`…), en gardant les mêmes noms de méthodes (`getGroups`, `addGroup`,
-   `addMessage`, `deleteGroup`).
-4. Remplacer la variable `currentUser` (dans `app.js`) et la zone `#user-zone`
-   (dans `index.html`) par le compte Google connecté via
-   `signInWithPopup(auth, new GoogleAuthProvider())`.
-
-Comme `app.js` ne dépend que de l'API de `store.js`, l'interface n'aura pas
-besoin d'être réécrite.
+> Remarque : la clé `apiKey` dans `firebase.js` est **publique par nature**
+> (elle identifie le projet côté navigateur) ; la vraie sécurité vient des
+> règles Firestore.
