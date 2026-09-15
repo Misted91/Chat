@@ -1,18 +1,24 @@
 name: Déploiement Firebase Hosting
 
 # Déploie le site sur https://chat-fd96b.web.app à chaque push sur la branche.
+# Le déploiement ne s'exécute que si le secret FIREBASE_SERVICE_ACCOUNT existe ;
+# sinon l'étape est ignorée (le run reste vert).
 on:
   push:
     branches:
       - claude/keen-meitner-4544zu
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Déployer sur Firebase Hosting (production)
+        if: ${{ env.SA != '' }}
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
