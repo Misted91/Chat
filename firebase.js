@@ -13,7 +13,6 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
-  signInWithRedirect,
   getRedirectResult,
   signOut,
   onAuthStateChanged,
@@ -36,15 +35,17 @@ export const db = getFirestore(app);
 
 const provider = new GoogleAuthProvider();
 
-// Connexion par redirection : la page navigue vers Google puis revient
-// connectée. On évite ainsi le popup (et les avertissements COOP
-// « window.closed » qu'il déclenche sur certains navigateurs).
+// Connexion par popup. C'est la méthode fiable quand le site est hébergé
+// sur un domaine différent de authDomain (ex. GitHub Pages) : le popup
+// renvoie la connexion via postMessage.
+//
+// Les avertissements « Cross-Origin-Opener-Policy … window.closed » dans
+// la console sont inoffensifs : Firebase surveille la fermeture du popup,
+// le navigateur le signale, mais la connexion aboutit quand même.
+//
+// (La connexion par redirection est volontairement écartée : elle échoue
+// silencieusement en cross-domaine à cause du cloisonnement du stockage.)
 export function loginWithGoogle() {
-  return signInWithRedirect(auth, provider);
-}
-
-// Variante popup, gardée au cas où (non utilisée par défaut).
-export function loginWithGooglePopup() {
   return signInWithPopup(auth, provider);
 }
 
