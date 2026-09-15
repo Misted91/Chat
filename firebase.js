@@ -13,6 +13,8 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   onAuthStateChanged,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
@@ -34,8 +36,32 @@ export const db = getFirestore(app);
 
 const provider = new GoogleAuthProvider();
 
-export function loginWithGoogle() {
-  return signInWithPopup(auth, provider);
+// Codes d'erreur où le popup n'a pas pu s'ouvrir/aboutir
+// (bloqué, fermé, ou politique COOP) → on retombe sur la redirection.
+const POPUP_FALLBACK = new Set([
+  'auth/popup-blocked',
+  'auth/popup-closed-by-user',
+  'auth/cancelled-popup-request',
+  'auth/operation-not-supported-in-this-environment',
+  'auth/web-storage-unsupported',
+]);
+
+export async function loginWithGoogle() {
+  try {
+    return await signInWithPopup(auth, provider);
+  } catch (err) {
+    if (POPUP_FALLBACK.has(err.code)) {
+      // Connexion par redirection : la page se recharge puis revient connectée.
+      return signInWithRedirect(auth, provider);
+    }
+    throw err;
+  }
+}
+
+// À appeler au démarrage : récupère le résultat d'une connexion par redirection
+// et remonte une éventuelle erreur (ex. fournisseur Google non activé).
+export function handleRedirectResult() {
+  return getRedirectResult(auth);
 }
 
 export function logout() {

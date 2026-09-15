@@ -3,7 +3,12 @@
  * Auth Google (Firebase) + données temps réel (Firestore).
  */
 import { Store } from './store.js';
-import { loginWithGoogle, logout, watchAuth } from './firebase.js';
+import {
+  loginWithGoogle,
+  logout,
+  watchAuth,
+  handleRedirectResult,
+} from './firebase.js';
 
 // --- État ---
 let currentUser = null;         // objet utilisateur Firebase
@@ -29,10 +34,28 @@ const composer = document.getElementById('composer');
 const messageInput = document.getElementById('message-input');
 
 // --- Authentification ---
+function authErrorMessage(err) {
+  if (err.code === 'auth/operation-not-allowed') {
+    return "La connexion Google n'est pas activée dans la console Firebase " +
+      '(Authentication → Sign-in method → Google).';
+  }
+  if (err.code === 'auth/unauthorized-domain') {
+    return "Ce domaine n'est pas autorisé dans Firebase " +
+      '(Authentication → Settings → Domaines autorisés).';
+  }
+  return err.message;
+}
+
+// Récupère le retour d'une éventuelle connexion par redirection.
+handleRedirectResult().catch((err) => {
+  console.error(err);
+  alert('Connexion impossible : ' + authErrorMessage(err));
+});
+
 loginBtn.addEventListener('click', () => {
   loginWithGoogle().catch((err) => {
     console.error(err);
-    alert('Connexion impossible : ' + err.message);
+    alert('Connexion impossible : ' + authErrorMessage(err));
   });
 });
 
