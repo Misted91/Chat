@@ -1,0 +1,21 @@
+name: Déploiement Firebase Hosting
+
+# Déploie le site sur https://chat-fd96b.web.app à chaque push sur la branche.
+on:
+  push:
+    branches:
+      - claude/keen-meitner-4544zu
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Déployer sur Firebase Hosting (production)
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          channelId: live
+          projectId: chat-fd96b
