@@ -5,20 +5,49 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Groupes : lisibles et créables par tout utilisateur connecté.
     match /groups/{groupId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
-                    && request.resource.data.createdBy == request.auth.uid;
-      // Seul le créateur peut supprimer le groupe.
-      allow delete: if request.auth != null
-                    && resource.data.createdBy == request.auth.uid;
+      // Données du groupe (pour vérifier bannissement / admin).
+      function groupData() {
+        return get(/databases/$(database)/documents/groups/$(groupId)).data;
+      }
+      function bannedUids() {
+        let g = groupData();
+        return ('bannedUids' in g) ? g.bannedUids : [];
+      }
+      function isSignedIn() { return request.auth != null; }
+      function isBanned() {
+        return isSignedIn() && bannedUids().hasAny([request.auth.uid]);
+      }
+      function isAdmin() {
+        return isSignedIn() && request.auth.uid == groupData().createdBy;
+      }
 
-      // Messages d'un groupe.
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+                    && request.resource.data.createdBy == request.auth.uid;
+      // L'admin (créateur) peut modifier le groupe (ex. bannir) ou le supprimer.
+      allow update, delete: if isSignedIn()
+                    && request.auth.uid == resource.data.createdBy;
+
+      // Membres : chacun ne gère que sa propre fiche.
+      match /members/{uid} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && request.auth.uid == uid;
+      }
+
+      // Messages.
       match /messages/{messageId} {
-        allow read: if request.auth != null;
-        allow create: if request.auth != null
+        allow read: if isSignedIn() && !isBanned();
+        allow create: if isSignedIn() && !isBanned()
                       && request.resource.data.author == request.auth.uid;
+        // Mise à jour :
+        //  - n'importe quel membre non banni peut changer les réactions ;
+        //  - l'admin peut aussi épingler / modifier.
+        allow update: if isSignedIn() && !isBanned() && (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
+          || isAdmin()
+        );
+        allow delete: if isAdmin();
       }
     }
   }

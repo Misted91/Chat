@@ -202,6 +202,7 @@ html, body {
   gap: 12px;
 }
 .chat__head h2 { margin: 0; font-size: 18px; }
+.chat__actions { display: flex; gap: 8px; }
 
 .btn-danger {
   border: 1px solid var(--danger);
@@ -213,6 +214,62 @@ html, body {
   font-size: 13px;
 }
 .btn-danger:hover { background: var(--danger); color: white; }
+
+.btn-ghost {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.btn-ghost:hover { color: var(--text); border-color: var(--muted); }
+
+.tag {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  background: var(--accent-2);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 20px;
+}
+.group-item { justify-content: flex-start; gap: 8px; }
+.group-item > span:first-child { flex: 1; }
+
+/* ---------- Barre des messages épinglés ---------- */
+.pinned-bar {
+  border-bottom: 1px solid var(--border);
+  background: #14171e;
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.pinned-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.pinned-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pinned-unpin {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+}
+.pinned-unpin:hover { color: var(--danger); }
 
 .messages {
   flex: 1;
@@ -246,6 +303,107 @@ html, body {
   margin-bottom: 3px;
 }
 .bubble.me .meta { color: #dbe4ff; }
+.bubble.pinned { box-shadow: inset 0 0 0 1px var(--accent); }
+.bubble .text { display: block; }
+
+/* ---------- Réactions ---------- */
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  position: relative;
+}
+.reaction {
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  border-radius: 20px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 1.6;
+}
+.reaction:hover { border-color: var(--muted); }
+.reaction.mine { border-color: var(--accent); background: rgba(91, 140, 255, .15); }
+.bubble.me .reaction { background: rgba(255, 255, 255, .12); border-color: transparent; color: white; }
+.reaction.add { opacity: .8; }
+.reaction.pin-btn { margin-left: auto; }
+
+.emoji-picker {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 4px;
+  display: flex;
+  gap: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px;
+  z-index: 5;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .4);
+}
+.emoji-picker button {
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+.emoji-picker button:hover { background: var(--panel-2); }
+
+/* ---------- Modale admin ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, .55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 20px;
+}
+.modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal__head h3 { margin: 0; font-size: 18px; }
+.modal__close {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+.modal__close:hover { color: var(--text); }
+.modal__sub { color: var(--muted); font-size: 13px; margin: 6px 0 14px; }
+
+.member-list { list-style: none; margin: 0; padding: 0; }
+.member {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.member:last-child { border-bottom: none; }
+.member__right { display: flex; align-items: center; gap: 8px; }
 
 .composer {
   display: flex;

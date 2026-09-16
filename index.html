@@ -55,8 +55,14 @@
     <main class="chat">
       <header class="chat__head" id="chat-head">
         <h2 id="chat-title">Sélectionne un groupe</h2>
-        <button class="btn-danger" id="delete-group" hidden>Supprimer</button>
+        <div class="chat__actions">
+          <button class="btn-ghost" id="admin-btn" hidden>⚙️ Admin</button>
+          <button class="btn-danger" id="delete-group" hidden>Supprimer</button>
+        </div>
       </header>
+
+      <!-- Barre des messages épinglés -->
+      <div class="pinned-bar" id="pinned-bar" hidden></div>
 
       <div class="messages" id="messages"></div>
 
@@ -70,6 +76,18 @@
         <button type="submit">Envoyer</button>
       </form>
     </main>
+  </div>
+
+  <!-- Modale du panneau admin -->
+  <div class="modal-overlay" id="admin-overlay" hidden>
+    <div class="modal">
+      <header class="modal__head">
+        <h3>Panneau admin</h3>
+        <button class="modal__close" id="admin-close" aria-label="Fermer">✕</button>
+      </header>
+      <p class="modal__sub">Membres du groupe. Tu peux bannir ou débannir.</p>
+      <ul class="member-list" id="member-list"></ul>
+    </div>
   </div>
 
   <script type="module" src="app.js"></script>

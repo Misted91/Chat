@@ -11,5 +11,8 @@
       "firestore.rules",
       "README.md"
     ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
   }
 }
