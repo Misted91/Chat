@@ -26,16 +26,13 @@ service cloud.firestore {
         let g = groupData();
         return ('memberUids' in g) ? g.memberUids : [];
       }
-      function isPublic() {
-        let g = groupData();
-        return !('visibility' in g) || g.visibility == 'public';
-      }
       function isSignedIn() { return request.auth != null; }
       function isBanned() { return isSignedIn() && bannedUids().hasAny([request.auth.uid]); }
       function isAdmin() { return isSignedIn() && request.auth.uid == groupData().createdBy; }
       function isMember() { return isSignedIn() && memberUids().hasAny([request.auth.uid]); }
+      // Accès réservé aux membres (créateur ou personnes ayant rejoint par code).
       function canView() {
-        return isSignedIn() && !isBanned() && (isPublic() || isMember() || isAdmin());
+        return isSignedIn() && !isBanned() && (isMember() || isAdmin());
       }
       // Auto-adhésion : la seule modif est l'ajout de son propre uid à memberUids.
       function isSelfJoin() {

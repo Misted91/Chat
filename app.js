@@ -17,13 +17,11 @@ const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 // --- État ---
 let currentUser = null;
 let currentGroupId = null;
-let publicGroups = [];
 let memberGroups = [];
 let extraGroups = new Map(); // groupes récupérés à la volée (rejoints à l'instant)
 let groups = []; // fusion, dédupliquée
 let currentMessages = [];
 let currentMembers = [];
-let unsubPublic = null;
 let unsubMember = null;
 let unsubMessages = null;
 let unsubMembers = null;
@@ -52,9 +50,6 @@ const messageInput = document.getElementById('message-input');
 const adminOverlay = document.getElementById('admin-overlay');
 const adminClose = document.getElementById('admin-close');
 const memberList = document.getElementById('member-list');
-const visPublicBtn = document.getElementById('vis-public');
-const visPrivateBtn = document.getElementById('vis-private');
-const visibilityHint = document.getElementById('visibility-hint');
 const inviteCodeEl = document.getElementById('invite-code');
 const copyInviteBtn = document.getElementById('copy-invite');
 
@@ -74,9 +69,7 @@ function isBannedFrom(group) {
 }
 function mergeGroups() {
   const map = new Map();
-  [...extraGroups.values(), ...publicGroups, ...memberGroups].forEach((g) =>
-    map.set(g.id, g)
-  );
+  [...extraGroups.values(), ...memberGroups].forEach((g) => map.set(g.id, g));
   groups = [...map.values()]
     .filter((g) => !isBannedFrom(g))
     .sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
@@ -132,22 +125,17 @@ watchAuth((user) => {
 // --- Groupes (deux abonnements fusionnés) ---
 function startGroupsListeners() {
   stopGroupsListeners();
-  const onErr = (err) => {
-    console.error('Lecture des groupes :', err);
-  };
-  unsubPublic = Store.watchPublicGroups((list) => {
-    publicGroups = list;
-    onGroupsChanged();
-  }, onErr);
-  unsubMember = Store.watchMemberGroups(currentUser.uid, (list) => {
-    memberGroups = list;
-    onGroupsChanged();
-  }, onErr);
+  unsubMember = Store.watchMemberGroups(
+    currentUser.uid,
+    (list) => {
+      memberGroups = list;
+      onGroupsChanged();
+    },
+    (err) => console.error('Lecture des groupes :', err)
+  );
 }
 function stopGroupsListeners() {
-  if (unsubPublic) { unsubPublic(); unsubPublic = null; }
   if (unsubMember) { unsubMember(); unsubMember = null; }
-  publicGroups = [];
   memberGroups = [];
   extraGroups.clear();
 }
@@ -190,12 +178,6 @@ function renderGroups() {
     name.textContent = group.name;
     li.appendChild(name);
 
-    if (group.visibility === 'private') {
-      const lock = document.createElement('span');
-      lock.className = 'lock';
-      lock.textContent = '🔒';
-      li.appendChild(lock);
-    }
     if (isAdminOf(group)) {
       const tag = document.createElement('span');
       tag.className = 'tag';
@@ -389,16 +371,6 @@ adminOverlay.addEventListener('click', (e) => {
   if (e.target === adminOverlay) adminOverlay.hidden = true;
 });
 
-visPublicBtn.addEventListener('click', () => changeVisibility('public'));
-visPrivateBtn.addEventListener('click', () => changeVisibility('private'));
-function changeVisibility(v) {
-  if (!currentGroupId) return;
-  Store.setVisibility(currentGroupId, v).catch((err) => {
-    console.error(err);
-    alert('Modification impossible : ' + err.message);
-  });
-}
-
 copyInviteBtn.addEventListener('click', async () => {
   const code = inviteCodeEl.textContent.trim();
   try {
@@ -413,15 +385,6 @@ copyInviteBtn.addEventListener('click', async () => {
 function renderAdminPanel() {
   const group = currentGroup();
   if (!group) return;
-
-  // Visibilité
-  const vis = group.visibility || 'public';
-  visPublicBtn.classList.toggle('active', vis === 'public');
-  visPrivateBtn.classList.toggle('active', vis === 'private');
-  visibilityHint.textContent =
-    vis === 'public'
-      ? 'Tout le monde voit ce groupe et peut le rejoindre.'
-      : 'Seuls les membres invités (par code) voient ce groupe.';
 
   // Code d'invitation
   inviteCodeEl.textContent = group.joinCode || '------';

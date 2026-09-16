@@ -27,7 +27,6 @@ import {
   deleteDoc,
   onSnapshot,
   query,
-  where,
   serverTimestamp,
   arrayUnion,
   arrayRemove,
@@ -41,17 +40,7 @@ function makeCode(len = 6) {
 }
 
 export const Store = {
-  /** Groupes publics (visibles par tous). */
-  watchPublicGroups(callback, onError) {
-    const q = query(collection(db, 'groups'), where('visibility', '==', 'public'));
-    return onSnapshot(
-      q,
-      (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
-      onError
-    );
-  },
-
-  /** Groupes dont l'utilisateur est membre (inclut les privés qu'il a rejoints). */
+  /** Groupes dont l'utilisateur est membre (créés ou rejoints par code). */
   watchMemberGroups(uid, callback, onError) {
     const q = query(collection(db, 'groups'), where('memberUids', 'array-contains', uid));
     return onSnapshot(
@@ -92,7 +81,6 @@ export const Store = {
       createdAt: serverTimestamp(),
       createdBy: user.uid,
       createdByName: user.displayName || 'Anonyme',
-      visibility: 'public',
       memberUids: [user.uid],
       bannedUids: [],
       joinCode: code,
@@ -104,11 +92,6 @@ export const Store = {
 
   async deleteGroup(groupId) {
     return deleteDoc(doc(db, 'groups', groupId));
-  },
-
-  /** Change la visibilité (public / privé). */
-  async setVisibility(groupId, visibility) {
-    return updateDoc(doc(db, 'groups', groupId), { visibility });
   },
 
   async addMessage(groupId, { text, user }) {
