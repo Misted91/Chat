@@ -5,8 +5,16 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Codes d'invitation (lisibles par tout utilisateur connecté pour rejoindre).
+    match /invites/{code} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+                    && request.resource.data.createdBy == request.auth.uid;
+      allow delete: if request.auth != null
+                    && resource.data.createdBy == request.auth.uid;
+    }
+
     match /groups/{groupId} {
-      // Données du groupe (pour vérifier bannissement / admin).
       function groupData() {
         return get(/databases/$(database)/documents/groups/$(groupId)).data;
       }
@@ -14,36 +22,46 @@ service cloud.firestore {
         let g = groupData();
         return ('bannedUids' in g) ? g.bannedUids : [];
       }
-      function isSignedIn() { return request.auth != null; }
-      function isBanned() {
-        return isSignedIn() && bannedUids().hasAny([request.auth.uid]);
+      function memberUids() {
+        let g = groupData();
+        return ('memberUids' in g) ? g.memberUids : [];
       }
-      function isAdmin() {
-        return isSignedIn() && request.auth.uid == groupData().createdBy;
+      function isPublic() {
+        let g = groupData();
+        return !('visibility' in g) || g.visibility == 'public';
+      }
+      function isSignedIn() { return request.auth != null; }
+      function isBanned() { return isSignedIn() && bannedUids().hasAny([request.auth.uid]); }
+      function isAdmin() { return isSignedIn() && request.auth.uid == groupData().createdBy; }
+      function isMember() { return isSignedIn() && memberUids().hasAny([request.auth.uid]); }
+      function canView() {
+        return isSignedIn() && !isBanned() && (isPublic() || isMember() || isAdmin());
+      }
+      // Auto-adhésion : la seule modif est l'ajout de son propre uid à memberUids.
+      function isSelfJoin() {
+        return isSignedIn() && !isBanned()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids'])
+          && request.resource.data.memberUids.hasAll(resource.data.memberUids)
+          && request.resource.data.memberUids.removeAll(resource.data.memberUids)
+               .hasOnly([request.auth.uid]);
       }
 
-      allow read: if isSignedIn();
+      allow read: if canView();
       allow create: if isSignedIn()
                     && request.resource.data.createdBy == request.auth.uid;
-      // L'admin (créateur) peut modifier le groupe (ex. bannir) ou le supprimer.
-      allow update, delete: if isSignedIn()
-                    && request.auth.uid == resource.data.createdBy;
+      allow update: if isAdmin() || isSelfJoin();
+      allow delete: if isAdmin();
 
-      // Membres : chacun ne gère que sa propre fiche.
       match /members/{uid} {
-        allow read: if isSignedIn();
-        allow write: if isSignedIn() && request.auth.uid == uid;
+        allow read: if canView();
+        allow write: if isSignedIn() && request.auth.uid == uid && !isBanned();
       }
 
-      // Messages.
       match /messages/{messageId} {
-        allow read: if isSignedIn() && !isBanned();
-        allow create: if isSignedIn() && !isBanned()
+        allow read: if canView();
+        allow create: if canView()
                       && request.resource.data.author == request.auth.uid;
-        // Mise à jour :
-        //  - n'importe quel membre non banni peut changer les réactions ;
-        //  - l'admin peut aussi épingler / modifier.
-        allow update: if isSignedIn() && !isBanned() && (
+        allow update: if canView() && (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
           || isAdmin()
         );

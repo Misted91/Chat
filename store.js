@@ -3,71 +3,102 @@
  * -------------------------------------------------------------
  * Modèle de données :
  *   groups (collection)
- *     └─ {groupId} : { name, createdAt, createdBy, createdByName, bannedUids[] }
- *          ├─ messages (sous-collection)
- *          │    └─ {msgId} : { author, authorName, text, ts, reactions{}, pinned }
- *          └─ members (sous-collection)
- *               └─ {uid} : { uid, name, joinedAt }
+ *     └─ {groupId} : {
+ *          name, createdAt, createdBy, createdByName,
+ *          visibility: 'public' | 'private',
+ *          memberUids: [uid...],   // qui a accès (public: tout le monde s'ajoute en ouvrant)
+ *          bannedUids: [uid...],
+ *          joinCode: 'ABC123'
+ *        }
+ *          ├─ messages/{msgId} : { author, authorName, text, ts, reactions{}, pinned }
+ *          └─ members/{uid}    : { uid, name, joinedAt }
  *
- * reactions = { "👍": ["uid1","uid2"], "❤️": ["uid3"] }
+ *   invites (collection)
+ *     └─ {code} : { groupId, createdBy }   // permet de rejoindre un groupe privé par code
  */
 import { db } from './firebase.js';
 import {
   collection,
   doc,
+  getDoc,
   addDoc,
   setDoc,
   updateDoc,
   deleteDoc,
   onSnapshot,
   query,
-  orderBy,
+  where,
   serverTimestamp,
   arrayUnion,
   arrayRemove,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
+function makeCode(len = 6) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let out = '';
+  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
 export const Store = {
-  /** Abonnement temps réel à la liste des groupes. */
-  watchGroups(callback) {
-    const q = query(collection(db, 'groups'), orderBy('createdAt', 'asc'));
-    return onSnapshot(q, (snap) => {
-      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+  /** Groupes publics (visibles par tous). */
+  watchPublicGroups(callback) {
+    const q = query(collection(db, 'groups'), where('visibility', '==', 'public'));
+    return onSnapshot(q, (snap) =>
+      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    );
   },
 
-  /** Abonnement temps réel aux messages d'un groupe. */
-  watchMessages(groupId, callback, onError) {
-    const q = query(
-      collection(db, 'groups', groupId, 'messages'),
-      orderBy('ts', 'asc')
+  /** Groupes dont l'utilisateur est membre (inclut les privés qu'il a rejoints). */
+  watchMemberGroups(uid, callback) {
+    const q = query(collection(db, 'groups'), where('memberUids', 'array-contains', uid));
+    return onSnapshot(q, (snap) =>
+      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
     );
+  },
+
+  watchMessages(groupId, callback, onError) {
     return onSnapshot(
-      q,
-      (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      collection(db, 'groups', groupId, 'messages'),
+      (snap) => {
+        const msgs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        msgs.sort((a, b) => (a.ts?.toMillis?.() || 0) - (b.ts?.toMillis?.() || 0));
+        callback(msgs);
+      },
       onError
     );
   },
 
-  /** Abonnement temps réel à la liste des membres d'un groupe. */
   watchMembers(groupId, callback) {
-    return onSnapshot(collection(db, 'groups', groupId, 'members'), (snap) => {
-      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+    return onSnapshot(collection(db, 'groups', groupId, 'members'), (snap) =>
+      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    );
   },
 
   async addGroup(name, user) {
-    return addDoc(collection(db, 'groups'), {
+    const code = makeCode();
+    const ref = await addDoc(collection(db, 'groups'), {
       name: name.trim(),
       createdAt: serverTimestamp(),
       createdBy: user.uid,
       createdByName: user.displayName || 'Anonyme',
+      visibility: 'public',
+      memberUids: [user.uid],
       bannedUids: [],
+      joinCode: code,
     });
+    // Enregistre le code d'invitation.
+    await setDoc(doc(db, 'invites', code), { groupId: ref.id, createdBy: user.uid });
+    return ref;
   },
 
   async deleteGroup(groupId) {
     return deleteDoc(doc(db, 'groups', groupId));
+  },
+
+  /** Change la visibilité (public / privé). */
+  async setVisibility(groupId, visibility) {
+    return updateDoc(doc(db, 'groups', groupId), { visibility });
   },
 
   async addMessage(groupId, { text, user }) {
@@ -81,8 +112,11 @@ export const Store = {
     });
   },
 
-  /** Marque sa présence dans le groupe (pour la liste des membres). */
+  /** Marque sa présence dans le groupe (membre + fiche). */
   async joinGroup(groupId, user) {
+    await updateDoc(doc(db, 'groups', groupId), {
+      memberUids: arrayUnion(user.uid),
+    });
     return setDoc(
       doc(db, 'groups', groupId, 'members', user.uid),
       {
@@ -94,7 +128,15 @@ export const Store = {
     );
   },
 
-  /** Ajoute ou retire une réaction emoji de l'utilisateur sur un message. */
+  /** Rejoint un groupe via un code d'invitation. Renvoie le groupId. */
+  async joinByCode(code, user) {
+    const inviteSnap = await getDoc(doc(db, 'invites', code.trim().toUpperCase()));
+    if (!inviteSnap.exists()) return null;
+    const { groupId } = inviteSnap.data();
+    await this.joinGroup(groupId, user);
+    return groupId;
+  },
+
   async toggleReaction(groupId, message, emoji, uid) {
     const reactions = { ...(message.reactions || {}) };
     const users = new Set(reactions[emoji] || []);
@@ -102,20 +144,18 @@ export const Store = {
     else users.add(uid);
     if (users.size) reactions[emoji] = [...users];
     else delete reactions[emoji];
-    return updateDoc(doc(db, 'groups', groupId, 'messages', message.id), {
-      reactions,
-    });
+    return updateDoc(doc(db, 'groups', groupId, 'messages', message.id), { reactions });
   },
 
-  /** Épingle / désépingle un message (réservé à l'admin côté interface). */
   async setPinned(groupId, msgId, pinned) {
     return updateDoc(doc(db, 'groups', groupId, 'messages', msgId), { pinned });
   },
 
-  /** Bannit / débannit un utilisateur du groupe. */
   async setBanned(groupId, uid, banned) {
     return updateDoc(doc(db, 'groups', groupId), {
       bannedUids: banned ? arrayUnion(uid) : arrayRemove(uid),
+      // Un banni est aussi retiré des membres.
+      memberUids: banned ? arrayRemove(uid) : arrayUnion(uid),
     });
   },
 };

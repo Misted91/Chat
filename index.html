@@ -48,6 +48,17 @@
         <button type="submit" aria-label="Créer le groupe">+</button>
       </form>
 
+      <form class="join-code" id="join-code-form">
+        <input
+          type="text"
+          id="join-code-input"
+          placeholder="Rejoindre avec un code…"
+          autocomplete="off"
+          maxlength="10"
+        />
+        <button type="submit" aria-label="Rejoindre">→</button>
+      </form>
+
       <ul class="group-list" id="group-list"></ul>
     </aside>
 
@@ -82,11 +93,34 @@
   <div class="modal-overlay" id="admin-overlay" hidden>
     <div class="modal">
       <header class="modal__head">
-        <h3>Panneau admin</h3>
+        <h3>Paramètres du groupe</h3>
         <button class="modal__close" id="admin-close" aria-label="Fermer">✕</button>
       </header>
-      <p class="modal__sub">Membres du groupe. Tu peux bannir ou débannir.</p>
-      <ul class="member-list" id="member-list"></ul>
+
+      <!-- Visibilité -->
+      <div class="settings-block">
+        <span class="settings-label">Visibilité</span>
+        <div class="toggle" id="visibility-toggle">
+          <button type="button" data-value="public" id="vis-public">🌍 Public</button>
+          <button type="button" data-value="private" id="vis-private">🔒 Privé</button>
+        </div>
+        <p class="settings-hint" id="visibility-hint"></p>
+      </div>
+
+      <!-- Code d'invitation -->
+      <div class="settings-block">
+        <span class="settings-label">Code d'invitation</span>
+        <div class="invite-row">
+          <code class="invite-code" id="invite-code">------</code>
+          <button type="button" class="btn-ghost" id="copy-invite">Copier</button>
+        </div>
+        <p class="settings-hint">Partage ce code pour laisser quelqu'un rejoindre le groupe.</p>
+      </div>
+
+      <div class="settings-block">
+        <span class="settings-label">Membres</span>
+        <ul class="member-list" id="member-list"></ul>
+      </div>
     </div>
   </div>
 

@@ -1,8 +1,8 @@
 /*
  * Logique de l'interface.
  * Auth Google + Firestore temps réel.
- * Fonctionnalités : groupes, messages, réactions emoji, épinglage,
- * panneau admin (bannir / débannir).
+ * Groupes (public/privé + invitation), messages, réactions, épinglage,
+ * panneau admin (paramètres + bannir).
  */
 import { Store } from './store.js';
 import {
@@ -17,9 +17,13 @@ const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 // --- État ---
 let currentUser = null;
 let currentGroupId = null;
-let groups = [];
+let publicGroups = [];
+let memberGroups = [];
+let groups = []; // fusion des deux, dédupliquée
 let currentMessages = [];
 let currentMembers = [];
+let unsubPublic = null;
+let unsubMember = null;
 let unsubMessages = null;
 let unsubMembers = null;
 
@@ -33,6 +37,8 @@ const userAvatar = document.getElementById('user-avatar');
 const groupList = document.getElementById('group-list');
 const newGroupForm = document.getElementById('new-group-form');
 const newGroupInput = document.getElementById('new-group-input');
+const joinCodeForm = document.getElementById('join-code-form');
+const joinCodeInput = document.getElementById('join-code-input');
 
 const chatTitle = document.getElementById('chat-title');
 const deleteBtn = document.getElementById('delete-group');
@@ -45,6 +51,11 @@ const messageInput = document.getElementById('message-input');
 const adminOverlay = document.getElementById('admin-overlay');
 const adminClose = document.getElementById('admin-close');
 const memberList = document.getElementById('member-list');
+const visPublicBtn = document.getElementById('vis-public');
+const visPrivateBtn = document.getElementById('vis-private');
+const visibilityHint = document.getElementById('visibility-hint');
+const inviteCodeEl = document.getElementById('invite-code');
+const copyInviteBtn = document.getElementById('copy-invite');
 
 // --- Helpers ---
 function currentGroup() {
@@ -56,15 +67,20 @@ function isAdminOf(group) {
 function isBannedFrom(group) {
   return group && currentUser && (group.bannedUids || []).includes(currentUser.uid);
 }
+function mergeGroups() {
+  const map = new Map();
+  [...publicGroups, ...memberGroups].forEach((g) => map.set(g.id, g));
+  groups = [...map.values()]
+    .filter((g) => !isBannedFrom(g))
+    .sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
+}
 
 // --- Authentification ---
 function authErrorMessage(err) {
-  if (err.code === 'auth/operation-not-allowed') {
+  if (err.code === 'auth/operation-not-allowed')
     return "La connexion Google n'est pas activée dans la console Firebase.";
-  }
-  if (err.code === 'auth/unauthorized-domain') {
+  if (err.code === 'auth/unauthorized-domain')
     return "Ce domaine n'est pas autorisé dans Firebase.";
-  }
   return err.message;
 }
 
@@ -94,64 +110,81 @@ watchAuth((user) => {
       userAvatar.hidden = false;
     }
     logoutBtn.hidden = false;
-    startGroupsListener();
+    startGroupsListeners();
   } else {
     loginOverlay.hidden = false;
     logoutBtn.hidden = true;
     userAvatar.hidden = true;
     userName.textContent = '';
+    stopGroupsListeners();
     resetChat();
     groupList.innerHTML = '';
   }
 });
 
-// --- Groupes (temps réel) ---
-function startGroupsListener() {
-  Store.watchGroups((list) => {
-    groups = list;
-    renderGroups();
-
-    const group = currentGroup();
-    if (currentGroupId && !group) {
-      resetChat(); // le groupe a été supprimé
-    } else if (group) {
-      // Si on vient d'être banni, on ferme le groupe.
-      if (isBannedFrom(group)) {
-        alert('Tu as été banni de ce groupe.');
-        resetChat();
-        return;
-      }
-      chatTitle.textContent = group.name;
-      adminBtn.hidden = !isAdminOf(group);
-      deleteBtn.hidden = !isAdminOf(group);
-      if (!adminOverlay.hidden) renderMembers(); // panneau admin ouvert
-    }
+// --- Groupes (deux abonnements fusionnés) ---
+function startGroupsListeners() {
+  stopGroupsListeners();
+  unsubPublic = Store.watchPublicGroups((list) => {
+    publicGroups = list;
+    onGroupsChanged();
   });
+  unsubMember = Store.watchMemberGroups(currentUser.uid, (list) => {
+    memberGroups = list;
+    onGroupsChanged();
+  });
+}
+function stopGroupsListeners() {
+  if (unsubPublic) { unsubPublic(); unsubPublic = null; }
+  if (unsubMember) { unsubMember(); unsubMember = null; }
+  publicGroups = [];
+  memberGroups = [];
+}
+
+function onGroupsChanged() {
+  mergeGroups();
+  renderGroups();
+
+  const group = currentGroup();
+  if (currentGroupId && !group) {
+    resetChat();
+  } else if (group) {
+    if (isBannedFrom(group)) {
+      alert('Tu as été banni de ce groupe.');
+      resetChat();
+      return;
+    }
+    chatTitle.textContent = group.name;
+    adminBtn.hidden = !isAdminOf(group);
+    deleteBtn.hidden = !isAdminOf(group);
+    if (!adminOverlay.hidden) renderAdminPanel();
+  }
 }
 
 function renderGroups() {
   groupList.innerHTML = '';
-
-  // On masque les groupes dont on est banni.
-  const visible = groups.filter((g) => !isBannedFrom(g));
-
-  if (visible.length === 0) {
+  if (groups.length === 0) {
     const li = document.createElement('li');
     li.className = 'empty';
-    li.textContent = 'Aucun groupe. Crée-en un ci-dessus.';
+    li.textContent = 'Aucun groupe. Crée-en un ou rejoins avec un code.';
     groupList.appendChild(li);
     return;
   }
 
-  visible.forEach((group) => {
+  groups.forEach((group) => {
     const li = document.createElement('li');
     li.className = 'group-item' + (group.id === currentGroupId ? ' active' : '');
-    li.dataset.id = group.id;
 
     const name = document.createElement('span');
     name.textContent = group.name;
     li.appendChild(name);
 
+    if (group.visibility === 'private') {
+      const lock = document.createElement('span');
+      lock.className = 'lock';
+      lock.textContent = '🔒';
+      li.appendChild(lock);
+    }
     if (isAdminOf(group)) {
       const tag = document.createElement('span');
       tag.className = 'tag';
@@ -176,10 +209,8 @@ function selectGroup(id) {
   composer.hidden = false;
   renderGroups();
 
-  // Marque notre présence dans le groupe.
   if (currentUser) Store.joinGroup(id, currentUser).catch(console.error);
 
-  // Abonnement aux messages.
   if (unsubMessages) unsubMessages();
   messagesEl.innerHTML = '';
   unsubMessages = Store.watchMessages(
@@ -191,16 +222,14 @@ function selectGroup(id) {
     },
     (err) => {
       console.error(err);
-      // Accès refusé (ex. banni) → on ferme.
       resetChat();
     }
   );
 
-  // Abonnement aux membres (pour le panneau admin).
   if (unsubMembers) unsubMembers();
   unsubMembers = Store.watchMembers(id, (members) => {
     currentMembers = members;
-    if (!adminOverlay.hidden) renderMembers();
+    if (!adminOverlay.hidden) renderAdminPanel();
   });
 }
 
@@ -221,14 +250,13 @@ function resetChat() {
   renderGroups();
 }
 
-// --- Rendu d'une bulle de message ---
+// --- Bulle de message ---
 function buildBubble(msg) {
   const group = currentGroup();
   const isMe = currentUser && msg.author === currentUser.uid;
   const bubble = document.createElement('div');
   bubble.className = 'bubble' + (isMe ? ' me' : '') + (msg.pinned ? ' pinned' : '');
 
-  // En-tête (auteur · heure · 📌)
   const meta = document.createElement('span');
   meta.className = 'meta';
   const date = msg.ts && msg.ts.toDate ? msg.ts.toDate() : new Date();
@@ -236,13 +264,11 @@ function buildBubble(msg) {
   meta.textContent = `${msg.authorName || 'Anonyme'} · ${time}${msg.pinned ? ' · 📌' : ''}`;
   bubble.appendChild(meta);
 
-  // Texte
   const text = document.createElement('span');
   text.className = 'text';
   text.textContent = msg.text;
   bubble.appendChild(text);
 
-  // Réactions existantes
   const reactions = msg.reactions || {};
   const reactRow = document.createElement('div');
   reactRow.className = 'reactions';
@@ -253,13 +279,12 @@ function buildBubble(msg) {
     const mine = currentUser && uids.includes(currentUser.uid);
     chip.className = 'reaction' + (mine ? ' mine' : '');
     chip.textContent = `${emoji} ${uids.length}`;
-    chip.addEventListener('click', () => {
-      Store.toggleReaction(currentGroupId, msg, emoji, currentUser.uid).catch(console.error);
-    });
+    chip.addEventListener('click', () =>
+      Store.toggleReaction(currentGroupId, msg, emoji, currentUser.uid).catch(console.error)
+    );
     reactRow.appendChild(chip);
   });
 
-  // Bouton « ajouter une réaction »
   const addBtn = document.createElement('button');
   addBtn.className = 'reaction add';
   addBtn.textContent = '😊 +';
@@ -279,14 +304,13 @@ function buildBubble(msg) {
   reactRow.appendChild(addBtn);
   reactRow.appendChild(picker);
 
-  // Bouton épingler (admin uniquement)
   if (isAdminOf(group)) {
     const pinBtn = document.createElement('button');
     pinBtn.className = 'reaction pin-btn';
     pinBtn.textContent = msg.pinned ? '📌 Désépingler' : '📌 Épingler';
-    pinBtn.addEventListener('click', () => {
-      Store.setPinned(currentGroupId, msg.id, !msg.pinned).catch(console.error);
-    });
+    pinBtn.addEventListener('click', () =>
+      Store.setPinned(currentGroupId, msg.id, !msg.pinned).catch(console.error)
+    );
     reactRow.appendChild(pinBtn);
   }
 
@@ -294,14 +318,12 @@ function buildBubble(msg) {
   return bubble;
 }
 
-// --- Rendu des messages ---
 function renderMessages() {
   messagesEl.innerHTML = '';
   currentMessages.forEach((msg) => messagesEl.appendChild(buildBubble(msg)));
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-// --- Barre des messages épinglés ---
 function renderPinned() {
   const pinned = currentMessages.filter((m) => m.pinned);
   pinnedBar.innerHTML = '';
@@ -310,46 +332,81 @@ function renderPinned() {
     return;
   }
   pinnedBar.hidden = false;
-
   const admin = isAdminOf(currentGroup());
   pinned.forEach((msg) => {
     const item = document.createElement('div');
     item.className = 'pinned-item';
-
     const label = document.createElement('span');
     label.className = 'pinned-text';
     label.textContent = `📌 ${msg.authorName} : ${msg.text}`;
     item.appendChild(label);
-
     if (admin) {
       const unpin = document.createElement('button');
       unpin.className = 'pinned-unpin';
       unpin.textContent = '✕';
       unpin.title = 'Désépingler';
-      unpin.addEventListener('click', () => {
-        Store.setPinned(currentGroupId, msg.id, false).catch(console.error);
-      });
+      unpin.addEventListener('click', () =>
+        Store.setPinned(currentGroupId, msg.id, false).catch(console.error)
+      );
       item.appendChild(unpin);
     }
     pinnedBar.appendChild(item);
   });
 }
 
-// --- Panneau admin (membres, bannir) ---
+// --- Panneau admin (paramètres + membres) ---
 adminBtn.addEventListener('click', () => {
   adminOverlay.hidden = false;
-  renderMembers();
+  renderAdminPanel();
 });
 adminClose.addEventListener('click', () => { adminOverlay.hidden = true; });
 adminOverlay.addEventListener('click', (e) => {
   if (e.target === adminOverlay) adminOverlay.hidden = true;
 });
 
-function renderMembers() {
+visPublicBtn.addEventListener('click', () => changeVisibility('public'));
+visPrivateBtn.addEventListener('click', () => changeVisibility('private'));
+function changeVisibility(v) {
+  if (!currentGroupId) return;
+  Store.setVisibility(currentGroupId, v).catch((err) => {
+    console.error(err);
+    alert('Modification impossible : ' + err.message);
+  });
+}
+
+copyInviteBtn.addEventListener('click', async () => {
+  const code = inviteCodeEl.textContent.trim();
+  try {
+    await navigator.clipboard.writeText(code);
+    copyInviteBtn.textContent = 'Copié !';
+    setTimeout(() => (copyInviteBtn.textContent = 'Copier'), 1500);
+  } catch {
+    alert('Code : ' + code);
+  }
+});
+
+function renderAdminPanel() {
   const group = currentGroup();
-  memberList.innerHTML = '';
   if (!group) return;
 
+  // Visibilité
+  const vis = group.visibility || 'public';
+  visPublicBtn.classList.toggle('active', vis === 'public');
+  visPrivateBtn.classList.toggle('active', vis === 'private');
+  visibilityHint.textContent =
+    vis === 'public'
+      ? 'Tout le monde voit ce groupe et peut le rejoindre.'
+      : 'Seuls les membres invités (par code) voient ce groupe.';
+
+  // Code d'invitation
+  inviteCodeEl.textContent = group.joinCode || '------';
+
+  // Membres
+  renderMembers(group);
+}
+
+function renderMembers(group) {
+  memberList.innerHTML = '';
   const banned = group.bannedUids || [];
 
   if (currentMembers.length === 0) {
@@ -363,14 +420,12 @@ function renderMembers() {
   currentMembers.forEach((m) => {
     const li = document.createElement('li');
     li.className = 'member';
-
     const name = document.createElement('span');
     name.textContent = m.name || 'Anonyme';
     li.appendChild(name);
 
     const right = document.createElement('span');
     right.className = 'member__right';
-
     if (m.uid === group.createdBy) {
       const tag = document.createElement('span');
       tag.className = 'tag';
@@ -381,12 +436,12 @@ function renderMembers() {
       const btn = document.createElement('button');
       btn.className = isBanned ? 'btn-ghost' : 'btn-danger';
       btn.textContent = isBanned ? 'Débannir' : 'Bannir';
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', () =>
         Store.setBanned(currentGroupId, m.uid, !isBanned).catch((err) => {
           console.error(err);
           alert('Action impossible : ' + err.message);
-        });
-      });
+        })
+      );
       right.appendChild(btn);
     }
     li.appendChild(right);
@@ -409,7 +464,26 @@ newGroupForm.addEventListener('submit', async (e) => {
   }
 });
 
-// --- Suppression du groupe courant ---
+// --- Rejoindre par code ---
+joinCodeForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const code = joinCodeInput.value.trim();
+  if (!code || !currentUser) return;
+  try {
+    const groupId = await Store.joinByCode(code, currentUser);
+    joinCodeInput.value = '';
+    if (!groupId) {
+      alert('Code invalide.');
+      return;
+    }
+    selectGroup(groupId);
+  } catch (err) {
+    console.error(err);
+    alert('Impossible de rejoindre : ' + err.message);
+  }
+});
+
+// --- Suppression du groupe ---
 deleteBtn.addEventListener('click', async () => {
   const group = currentGroup();
   if (!group) return;
