@@ -244,6 +244,8 @@ html, body {
   font-size: 15px;
   line-height: 1.35;
   word-wrap: break-word;
+  word-break: break-word;
+  width: fit-content;
 }
 .bubble.me {
   align-self: flex-end;
