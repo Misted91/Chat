@@ -19,7 +19,8 @@ let currentUser = null;
 let currentGroupId = null;
 let publicGroups = [];
 let memberGroups = [];
-let groups = []; // fusion des deux, dédupliquée
+let extraGroups = new Map(); // groupes récupérés à la volée (rejoints à l'instant)
+let groups = []; // fusion, dédupliquée
 let currentMessages = [];
 let currentMembers = [];
 let unsubPublic = null;
@@ -59,7 +60,11 @@ const copyInviteBtn = document.getElementById('copy-invite');
 
 // --- Helpers ---
 function currentGroup() {
-  return groups.find((g) => g.id === currentGroupId) || null;
+  return (
+    groups.find((g) => g.id === currentGroupId) ||
+    extraGroups.get(currentGroupId) ||
+    null
+  );
 }
 function isAdminOf(group) {
   return group && currentUser && group.createdBy === currentUser.uid;
@@ -69,7 +74,9 @@ function isBannedFrom(group) {
 }
 function mergeGroups() {
   const map = new Map();
-  [...publicGroups, ...memberGroups].forEach((g) => map.set(g.id, g));
+  [...extraGroups.values(), ...publicGroups, ...memberGroups].forEach((g) =>
+    map.set(g.id, g)
+  );
   groups = [...map.values()]
     .filter((g) => !isBannedFrom(g))
     .sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
@@ -125,20 +132,24 @@ watchAuth((user) => {
 // --- Groupes (deux abonnements fusionnés) ---
 function startGroupsListeners() {
   stopGroupsListeners();
+  const onErr = (err) => {
+    console.error('Lecture des groupes :', err);
+  };
   unsubPublic = Store.watchPublicGroups((list) => {
     publicGroups = list;
     onGroupsChanged();
-  });
+  }, onErr);
   unsubMember = Store.watchMemberGroups(currentUser.uid, (list) => {
     memberGroups = list;
     onGroupsChanged();
-  });
+  }, onErr);
 }
 function stopGroupsListeners() {
   if (unsubPublic) { unsubPublic(); unsubPublic = null; }
   if (unsubMember) { unsubMember(); unsubMember = null; }
   publicGroups = [];
   memberGroups = [];
+  extraGroups.clear();
 }
 
 function onGroupsChanged() {
@@ -198,10 +209,24 @@ function renderGroups() {
 }
 
 // --- Sélection d'un groupe ---
-function selectGroup(id) {
+async function selectGroup(id) {
   currentGroupId = id;
-  const group = currentGroup();
-  if (!group) return;
+  let group = currentGroup();
+
+  // Pas encore dans la liste (ex. on vient de le rejoindre) → on le récupère.
+  if (!group) {
+    try {
+      group = await Store.getGroup(id);
+    } catch (err) {
+      console.error(err);
+    }
+    if (group) {
+      extraGroups.set(id, group);
+      mergeGroups();
+      renderGroups();
+    }
+  }
+  if (!group || currentGroupId !== id) return;
 
   chatTitle.textContent = group.name;
   deleteBtn.hidden = !isAdminOf(group);

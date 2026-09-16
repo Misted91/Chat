@@ -42,19 +42,29 @@ function makeCode(len = 6) {
 
 export const Store = {
   /** Groupes publics (visibles par tous). */
-  watchPublicGroups(callback) {
+  watchPublicGroups(callback, onError) {
     const q = query(collection(db, 'groups'), where('visibility', '==', 'public'));
-    return onSnapshot(q, (snap) =>
-      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    return onSnapshot(
+      q,
+      (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      onError
     );
   },
 
   /** Groupes dont l'utilisateur est membre (inclut les privés qu'il a rejoints). */
-  watchMemberGroups(uid, callback) {
+  watchMemberGroups(uid, callback, onError) {
     const q = query(collection(db, 'groups'), where('memberUids', 'array-contains', uid));
-    return onSnapshot(q, (snap) =>
-      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    return onSnapshot(
+      q,
+      (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      onError
     );
+  },
+
+  /** Récupère un groupe une seule fois (pour l'ouvrir dès qu'on l'a rejoint). */
+  async getGroup(groupId) {
+    const snap = await getDoc(doc(db, 'groups', groupId));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
   },
 
   watchMessages(groupId, callback, onError) {
