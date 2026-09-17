@@ -601,6 +601,11 @@ function buildBubble(msg) {
     img.src = msg.image;
     img.alt = 'image';
     img.loading = 'lazy';
+    if (msg.imgW && msg.imgH) {
+      img.width = msg.imgW;
+      img.height = msg.imgH;
+      img.style.aspectRatio = `${msg.imgW} / ${msg.imgH}`;
+    }
     img.addEventListener('click', () => openLightbox(msg.image));
     bubble.appendChild(img);
   }
@@ -1137,7 +1142,8 @@ joinCodeForm.addEventListener('submit', async (e) => {
 deleteBtn.addEventListener('click', async () => {
   const group = currentGroup();
   if (!group) return;
-  if (!confirm(`Supprimer le groupe « ${group.name} » ?`)) return;
+  const ok = await confirmModal(`Supprimer le groupe « ${group.name} » ?`);
+  if (!ok) return;
   try {
     await Store.deleteGroup(currentGroupId, group.joinCode);
     resetChat();
@@ -1180,8 +1186,10 @@ function compressImage(file, maxDim = 1024, maxLen = 260000) {
         c2.height = Math.round(h * 0.7);
         c2.getContext('2d').drawImage(img, 0, 0, c2.width, c2.height);
         out = encode(c2, 0.6);
+        w = c2.width;
+        h = c2.height;
       }
-      resolve(out);
+      resolve({ url: out, w, h });
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image illisible')); };
     img.src = url;
@@ -1194,6 +1202,15 @@ function blobToDataURL(blob) {
     r.onload = () => resolve(r.result);
     r.onerror = reject;
     r.readAsDataURL(blob);
+  });
+}
+
+function imageDims(src) {
+  return new Promise((resolve) => {
+    const im = new Image();
+    im.onload = () => resolve({ w: im.naturalWidth, h: im.naturalHeight });
+    im.onerror = () => resolve({ w: 0, h: 0 });
+    im.src = src;
   });
 }
 
@@ -1213,12 +1230,13 @@ imageInput.addEventListener('change', async () => {
       if (f.type === 'image/gif') {
         const durl = await blobToDataURL(f);
         if (durl.length > 900000) { toast('GIF trop lourd (max ~650 Ko).'); continue; }
-        pendingImages.push(durl);
+        const dim = await imageDims(durl);
+        pendingImages.push({ url: durl, w: dim.w, h: dim.h });
         continue;
       }
       if (!f.type.startsWith('image/')) continue;
       const image = await compressImage(f);
-      if (image.length > 900000) { toast('Image trop lourde, ignorée.'); continue; }
+      if (image.url.length > 900000) { toast('Image trop lourde, ignorée.'); continue; }
       pendingImages.push(image);
     }
     if (!pendingImages.length) return;
@@ -1237,11 +1255,11 @@ function openImagePreview() {
 
 function renderPreviewThumbs() {
   previewThumbs.innerHTML = '';
-  pendingImages.forEach((src, i) => {
+  pendingImages.forEach((item, i) => {
     const wrap = document.createElement('div');
     wrap.className = 'preview-thumb';
     const im = document.createElement('img');
-    im.src = src;
+    im.src = item.url;
     im.alt = '';
     const rm = document.createElement('button');
     rm.type = 'button';
@@ -1257,7 +1275,7 @@ function renderPreviewThumbs() {
     wrap.appendChild(rm);
     previewThumbs.appendChild(wrap);
   });
-  const totalKb = Math.round(pendingImages.reduce((a, s) => a + s.length * 0.75, 0) / 1024);
+  const totalKb = Math.round(pendingImages.reduce((a, s) => a + s.url.length * 0.75, 0) / 1024);
   previewSize.textContent = `${pendingImages.length} image(s) · ~${totalKb} Ko`;
   refreshIcons();
 }
@@ -1284,7 +1302,9 @@ previewSend.addEventListener('click', async () => {
     for (let i = 0; i < imgs.length; i++) {
       await Store.addMessage(currentGroupId, {
         text: i === 0 ? text : '',
-        image: imgs[i],
+        image: imgs[i].url,
+        imgW: imgs[i].w || 0,
+        imgH: imgs[i].h || 0,
         user: currentUser,
         reply: i === 0 ? reply : null,
         mentions: i === 0 ? mentions : [],

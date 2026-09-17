@@ -111,7 +111,7 @@ export const Store = {
     return deleteDoc(doc(db, 'groups', groupId));
   },
 
-  async addMessage(groupId, { text = '', image = '', audio = '', user, reply = null, mentions = [] }) {
+  async addMessage(groupId, { text = '', image = '', imgW = 0, imgH = 0, audio = '', user, reply = null, mentions = [] }) {
     const data = {
       text: text.trim(),
       image,
@@ -124,6 +124,7 @@ export const Store = {
       pinned: false,
       mentions,
     };
+    if (image && imgW && imgH) { data.imgW = imgW; data.imgH = imgH; }
     if (reply) {
       data.replyTo = reply.id;
       data.replyToName = reply.name;

@@ -99,7 +99,7 @@ service cloud.firestore {
             'text', 'image', 'audio', 'author', 'authorName', 'authorPhoto',
             'ts', 'reactions', 'pinned', 'system', 'type', 'question',
             'pollOptions', 'pollVotes', 'replyTo', 'replyToName', 'replyToText',
-            'mentions', 'edited'
+            'mentions', 'edited', 'imgW', 'imgH'
           ])
           && d.text is string && d.text.size() <= 4000
           && (!('image' in d) || (d.image is string && d.image.size() <= 1000000))
