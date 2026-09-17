@@ -501,6 +501,33 @@ html, body {
 }
 .composer button:hover { background: var(--accent-2); }
 
+.attach {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  cursor: pointer;
+  font-size: 18px;
+  user-select: none;
+}
+.attach:hover { border-color: var(--muted); }
+.attach.busy { opacity: .5; pointer-events: none; }
+
+.bubble-img {
+  display: block;
+  max-width: 240px;
+  max-height: 280px;
+  border-radius: 10px;
+  margin-top: 4px;
+  cursor: pointer;
+  object-fit: cover;
+}
+.bubble .text + .bubble-img,
+.bubble-img + .text { margin-top: 6px; }
+
 @media (max-width: 720px) {
   .app { grid-template-columns: 1fr; }
   .sidebar { max-height: 42vh; }

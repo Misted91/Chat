@@ -46,6 +46,8 @@ const pinnedBar = document.getElementById('pinned-bar');
 const messagesEl = document.getElementById('messages');
 const composer = document.getElementById('composer');
 const messageInput = document.getElementById('message-input');
+const imageInput = document.getElementById('image-input');
+const attachBtn = document.getElementById('attach-btn');
 
 const adminOverlay = document.getElementById('admin-overlay');
 const adminClose = document.getElementById('admin-close');
@@ -291,10 +293,22 @@ function buildBubble(msg) {
   meta.textContent = `${msg.authorName || 'Anonyme'} · ${time}${msg.pinned ? ' · 📌' : ''}`;
   bubble.appendChild(meta);
 
-  const text = document.createElement('span');
-  text.className = 'text';
-  text.textContent = msg.text;
-  bubble.appendChild(text);
+  if (msg.image) {
+    const img = document.createElement('img');
+    img.className = 'bubble-img';
+    img.src = msg.image;
+    img.alt = 'image';
+    img.loading = 'lazy';
+    img.addEventListener('click', () => window.open(msg.image, '_blank'));
+    bubble.appendChild(img);
+  }
+
+  if (msg.text) {
+    const text = document.createElement('span');
+    text.className = 'text';
+    text.textContent = msg.text;
+    bubble.appendChild(text);
+  }
 
   const reactions = msg.reactions || {};
   const reactRow = document.createElement('div');
@@ -502,6 +516,74 @@ deleteBtn.addEventListener('click', async () => {
   } catch (err) {
     console.error(err);
     alert('Suppression impossible : ' + err.message);
+  }
+});
+
+// --- Compression d'image côté navigateur (pour économiser Firebase) ---
+// Redimensionne à maxDim px max, exporte en JPEG et réduit la qualité
+// jusqu'à passer sous ~250 Ko (data URL) → messages légers.
+function compressImage(file, maxDim = 1024, maxLen = 260000) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.width;
+      let h = img.height;
+      const scale = Math.min(1, maxDim / Math.max(w, h));
+      w = Math.round(w * scale);
+      h = Math.round(h * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+
+      let q = 0.72;
+      let out = canvas.toDataURL('image/jpeg', q);
+      // Réduit la qualité, puis la taille, jusqu'à tenir sous maxLen.
+      while (out.length > maxLen && q > 0.35) {
+        q -= 0.1;
+        out = canvas.toDataURL('image/jpeg', q);
+      }
+      if (out.length > maxLen) {
+        const c2 = document.createElement('canvas');
+        c2.width = Math.round(w * 0.7);
+        c2.height = Math.round(h * 0.7);
+        c2.getContext('2d').drawImage(img, 0, 0, c2.width, c2.height);
+        out = c2.toDataURL('image/jpeg', 0.6);
+      }
+      resolve(out);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Image illisible')); };
+    img.src = url;
+  });
+}
+
+imageInput.addEventListener('change', async () => {
+  const file = imageInput.files && imageInput.files[0];
+  imageInput.value = ''; // permet de renvoyer la même image plus tard
+  if (!file || !currentGroupId || !currentUser) return;
+  if (!file.type.startsWith('image/')) return;
+
+  attachBtn.classList.add('busy');
+  try {
+    const image = await compressImage(file);
+    // Sécurité : reste bien sous la limite Firestore (1 Mo/doc).
+    if (image.length > 900000) {
+      alert('Image trop lourde même après compression, essaie une image plus petite.');
+      return;
+    }
+    await Store.addMessage(currentGroupId, {
+      text: messageInput.value.trim(),
+      image,
+      user: currentUser,
+    });
+    messageInput.value = '';
+  } catch (err) {
+    console.error(err);
+    alert("Impossible d'envoyer l'image : " + err.message);
+  } finally {
+    attachBtn.classList.remove('busy');
   }
 });
 

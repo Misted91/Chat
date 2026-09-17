@@ -94,9 +94,10 @@ export const Store = {
     return deleteDoc(doc(db, 'groups', groupId));
   },
 
-  async addMessage(groupId, { text, user }) {
+  async addMessage(groupId, { text = '', image = '', user }) {
     return addDoc(collection(db, 'groups', groupId, 'messages'), {
       text: text.trim(),
+      image, // image compressée en data URL (vide si aucune)
       author: user.uid,
       authorName: user.displayName || 'Anonyme',
       ts: serverTimestamp(),
