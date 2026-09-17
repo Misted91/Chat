@@ -62,58 +62,37 @@ service cloud.firestore {
       match /members/{uid} {
         allow read: if pView();
         allow write: if isSignedIn() && request.auth.uid == uid && !pBanned();
+        allow delete: if pAdmin() || (isSignedIn() && request.auth.uid == uid);
       }
 
       match /typing/{uid} {
         allow read: if pView();
         allow write: if isSignedIn() && request.auth.uid == uid && !pBanned();
+        allow delete: if pAdmin() || (isSignedIn() && request.auth.uid == uid);
       }
 
       match /emojis/{name} {
         allow read: if pView();
-        allow create: if pView() && request.resource.data.by == request.auth.uid;
         allow delete: if pAdmin() || (pView() && resource.data.by == request.auth.uid);
+      }
+
+      function validMessage() {
+        let d = request.resource.data;
+        return d.author == request.auth.uid
+          && d.keys().hasOnly([
+            'text', 'image', 'audio', 'author', 'authorName', 'authorPhoto',
+            'ts', 'reactions', 'pinned', 'system', 'type', 'question',
+            'pollOptions', 'pollVotes', 'replyTo', 'replyToName', 'replyToText', 'mentions'
+          ])
+          && d.text is string && d.text.size() <= 5000
+          && (!('image' in d) || (d.image is string && d.image.size() <= 1500000))
+          && (!('audio' in d) || (d.audio is string && d.audio.size() <= 1500000));
       }
 
       match /messages/{messageId} {
         allow read: if pView();
-        allow create: if pView()
-                      && request.resource.data.author == request.auth.uid
-                      // Schéma et tailles bornées : un client ne peut plus
-                      // écrire de messages surdimensionnés ou de champs
-                      // arbitraires en contournant l'interface.
-                      && request.resource.data.keys().hasOnly(
-                           ['text', 'image', 'audio', 'author', 'authorName',
-                            'authorPhoto', 'ts', 'reactions', 'pinned',
-                            'system', 'type', 'question', 'pollOptions', 'pollVotes'])
-                      && request.resource.data.text is string
-                      && request.resource.data.text.size() <= 2000
-                      && request.resource.data.image is string
-                      && request.resource.data.image.size() <= 900000
-                      && (request.resource.data.image.size() == 0
-                          || request.resource.data.image.matches(
-                               'data:image/(webp|jpeg|png);base64,.*'))
-                      && (!('audio' in request.resource.data)
-                          || (request.resource.data.audio is string
-                              && request.resource.data.audio.size() <= 900000
-                              && (request.resource.data.audio.size() == 0
-                                  || request.resource.data.audio.matches(
-                                       'data:audio/[a-z0-9.+]+;base64,.*'))))
-                      && request.resource.data.reactions is map
-                      && request.resource.data.reactions.size() == 0
-                      && request.resource.data.pinned == false
-                      && (!('pollVotes' in request.resource.data)
-                          || (request.resource.data.pollVotes is map
-                              && request.resource.data.pollVotes.size() == 0))
-                      && (!('pollOptions' in request.resource.data)
-                          || (request.resource.data.pollOptions is list
-                              && request.resource.data.pollOptions.size() <= 10))
-                      && (!('question' in request.resource.data)
-                          || (request.resource.data.question is string
-                              && request.resource.data.question.size() <= 200));
+        allow create: if pView() && validMessage();
         allow update: if pView() && (
-          // Réactions et votes : maps entières interdites, seuls les updates
-          // ciblés via FieldValue (voir store.js) passent, avec tailles bornées.
           (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
            && request.resource.data.reactions is map
            && request.resource.data.reactions.size() <= 50)

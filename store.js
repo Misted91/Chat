@@ -11,12 +11,13 @@ import {
   onSnapshot,
   query,
   where,
+  writeBatch,
   serverTimestamp,
   arrayUnion,
   arrayRemove,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
-function makeCode(len = 8) {
+function makeCode(len = 16) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let out = '';
   for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
@@ -79,14 +80,19 @@ export const Store = {
     return ref;
   },
 
-  async deleteGroup(groupId) {
-    // Supprime aussi l'invitation associée pour ne pas laisser un code
-    // orphelin qui pointerait vers un groupe supprimé.
-    const snap = await getDoc(doc(db, 'groups', groupId));
-    const code = snap.exists() ? snap.data().joinCode : null;
-    if (code) {
-      await deleteDoc(doc(db, 'invites', code)).catch(() => {});
+  async deleteGroup(groupId, joinCode) {
+    const subs = ['messages', 'members', 'typing', 'emojis'];
+    for (const sub of subs) {
+      const snap = await getDocs(collection(db, 'groups', groupId, sub));
+      let batch = writeBatch(db);
+      let n = 0;
+      for (const d of snap.docs) {
+        batch.delete(d.ref);
+        if (++n >= 450) { await batch.commit(); batch = writeBatch(db); n = 0; }
+      }
+      if (n) await batch.commit();
     }
+    if (joinCode) await deleteDoc(doc(db, 'invites', joinCode)).catch(() => {});
     return deleteDoc(doc(db, 'groups', groupId));
   },
 
@@ -143,29 +149,15 @@ export const Store = {
     // Update ciblé via FieldValue : on n'écrase plus toute la map pollVotes,
     // impossible d'altérer ou d'effacer les votes des autres.
     const old = msg.pollVotes || {};
-    const update: Record<string, any> = {};
+    const update = {};
     Object.keys(old).forEach((k) => {
       update['pollVotes.' + k] = arrayRemove(uid);
     });
     const key = String(index);
     const already = (old[key] || []).includes(uid);
-    if (!already) update['pollVotes.' + key] = arrayUnion(uid);
-    else delete update['pollVotes.' + key];
+    if (already) delete update['pollVotes.' + key];
+    else update['pollVotes.' + key] = arrayUnion(uid);
     return updateDoc(doc(db, 'groups', groupId, 'messages', msg.id), update);
-  },
-
-  async addEmoji(groupId, { name, image, user }) {
-    return setDoc(doc(db, 'groups', groupId, 'emojis', name), {
-      name,
-      image,
-      by: user.uid,
-    });
-  },
-
-  watchEmojis(groupId, callback) {
-    return onSnapshot(collection(db, 'groups', groupId, 'emojis'), (snap) =>
-      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    );
   },
 
   async setTyping(groupId, user) {
@@ -219,12 +211,9 @@ export const Store = {
   },
 
   async toggleReaction(groupId, message, emoji, uid) {
-    // Update ciblé via FieldValue : on n'écrase plus toute la map reactions,
-    // impossible d'altérer ou d'effacer les réactions des autres.
-    const mine = ((message.reactions || {})[emoji] || []).includes(uid);
-    const field = 'reactions.' + emoji;
+    const has = ((message.reactions || {})[emoji] || []).includes(uid);
     return updateDoc(doc(db, 'groups', groupId, 'messages', message.id), {
-      [field]: mine ? arrayRemove(uid) : arrayUnion(uid),
+      ['reactions.' + emoji]: has ? arrayRemove(uid) : arrayUnion(uid),
     });
   },
 
