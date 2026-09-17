@@ -639,16 +639,20 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   overflow: hidden;
   text-align: left;
 }
-.bubble.me .poll-opt { background: rgba(255, 255, 255, .12); border-color: transparent; }
+.bubble.me .poll-opt { background: rgba(0, 0, 0, .22); border-color: rgba(255, 255, 255, .25); color: #fff; }
 .poll-opt.voted { border-color: var(--accent); }
+.bubble.me .poll-opt.voted { border-color: #fff; }
 .poll-bar {
   position: absolute;
   left: 0; top: 0; bottom: 0;
   background: rgba(91, 140, 255, .25);
   z-index: 0;
 }
+.bubble.me .poll-bar { background: rgba(255, 255, 255, .3); }
 .poll-label { position: relative; z-index: 1; flex: 1; }
 .poll-count { position: relative; z-index: 1; font-size: 12px; color: var(--muted); }
+.bubble.me .poll-count { color: #eaf0ff; }
+.bubble.me .poll-total { color: #dbe4ff; }
 .poll-total { font-size: 12px; color: var(--muted); }
 .poll-input {
   width: 100%;

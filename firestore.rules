@@ -62,23 +62,36 @@ service cloud.firestore {
       match /members/{uid} {
         allow read: if pView();
         allow write: if isSignedIn() && request.auth.uid == uid && !pBanned();
+        allow delete: if pAdmin() || (isSignedIn() && request.auth.uid == uid);
       }
 
       match /typing/{uid} {
         allow read: if pView();
         allow write: if isSignedIn() && request.auth.uid == uid && !pBanned();
+        allow delete: if pAdmin() || (isSignedIn() && request.auth.uid == uid);
       }
 
       match /emojis/{name} {
         allow read: if pView();
-        allow create: if pView() && request.resource.data.by == request.auth.uid;
         allow delete: if pAdmin() || (pView() && resource.data.by == request.auth.uid);
+      }
+
+      function validMessage() {
+        let d = request.resource.data;
+        return d.author == request.auth.uid
+          && d.keys().hasOnly([
+            'text', 'image', 'audio', 'author', 'authorName', 'authorPhoto',
+            'ts', 'reactions', 'pinned', 'system', 'type', 'question',
+            'pollOptions', 'pollVotes', 'replyTo', 'replyToName', 'replyToText', 'mentions'
+          ])
+          && d.text is string && d.text.size() <= 5000
+          && (!('image' in d) || (d.image is string && d.image.size() <= 1500000))
+          && (!('audio' in d) || (d.audio is string && d.audio.size() <= 1500000));
       }
 
       match /messages/{messageId} {
         allow read: if pView();
-        allow create: if pView()
-                      && request.resource.data.author == request.auth.uid;
+        allow create: if pView() && validMessage();
         allow update: if pView() && (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
           || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pollVotes'])

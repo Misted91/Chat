@@ -7,6 +7,11 @@ import {
 } from './firebase.js';
 
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
+const PICKER_EMOJIS = [
+  '😀', '😁', '😂', '🤣', '😊', '😍', '😘', '😎', '🤔', '😴',
+  '😭', '😡', '👍', '👎', '👏', '🙏', '💪', '🔥', '🎉', '❤️',
+  '💔', '✨', '⭐', '✅', '❌', '⚡', '🚀', '🍕', '☕', '🎮',
+];
 
 let currentUser = null;
 let currentGroupId = null;
@@ -42,22 +47,6 @@ const composer = document.getElementById('composer');
 const messageInput = document.getElementById('message-input');
 const imageInput = document.getElementById('image-input');
 const attachBtn = document.getElementById('attach-btn');
-const micBtn = document.getElementById('mic-btn');
-const audioInput = document.getElementById('audio-input');
-const audioBar = document.getElementById('audio-bar');
-const audioStatus = document.getElementById('audio-status');
-const audioPreview = document.getElementById('audio-preview');
-const audioStop = document.getElementById('audio-stop');
-const audioCancel = document.getElementById('audio-cancel');
-const audioSend = document.getElementById('audio-send');
-
-let mediaRecorder = null;
-let audioChunks = [];
-let recTimer = null;
-let recSeconds = 0;
-let pendingAudio = null;
-const AUDIO_MAX_LEN = 900000;
-const REC_MAX_SECONDS = 30;
 const previewOverlay = document.getElementById('preview-overlay');
 const previewImg = document.getElementById('preview-img');
 const previewSize = document.getElementById('preview-size');
@@ -90,9 +79,6 @@ const emojiBtn = document.getElementById('emoji-btn');
 const emojiPop = document.getElementById('emoji-pop');
 const timeBtn = document.getElementById('time-btn');
 
-let emojiMap = {};
-let currentEmojis = [];
-let unsubEmojis = null;
 let unsubTyping = null;
 let typingTimer = null;
 let lastTypingWrite = 0;
@@ -153,9 +139,6 @@ function renderMarkdown(text) {
   s = s.replace(/_([^_\n]+?)_/g, '<em>$1</em>');
   s = s.replace(/^&gt; ?(.*)$/gm, '<span class="md-quote">$1</span>');
   s = s.replace(/&lt;t:(\d+)(?::([tTdDfFR]))?&gt;/g, (m, sec, fmt) => formatDiscordTs(Number(sec), fmt || 'f'));
-  s = s.replace(/:([a-zA-Z0-9_]+):/g, (m, name) =>
-    emojiMap[name] ? `<img class="custom-emoji" src="${emojiMap[name]}" alt=":${name}:" />` : m
-  );
   s = s.replace(/\n/g, '<br>');
   return s;
 }
@@ -355,14 +338,6 @@ async function selectGroup(id) {
 
   if (unsubTyping) unsubTyping();
   unsubTyping = Store.watchTyping(id, renderTyping);
-
-  if (unsubEmojis) unsubEmojis();
-  unsubEmojis = Store.watchEmojis(id, (list) => {
-    currentEmojis = list;
-    emojiMap = {};
-    list.forEach((e) => (emojiMap[e.name] = e.image));
-    if (!emojiPop.hidden) renderEmojiPop();
-  });
 }
 
 function maybeNotify(messages) {
@@ -398,11 +373,6 @@ function renderTyping(list) {
 }
 
 function resetChat() {
-  if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
-  resetAudioBar();
-  if (unsubEmojis) { unsubEmojis(); unsubEmojis = null; }
-  emojiMap = {};
-  currentEmojis = [];
   emojiPop.hidden = true;
   if (unsubTyping) { unsubTyping(); unsubTyping = null; }
   if (currentGroupId && currentUser) Store.clearTyping(currentGroupId, currentUser.uid).catch(() => {});
@@ -550,9 +520,13 @@ function buildBubble(msg) {
     pinBtn.innerHTML =
       '<i data-lucide="pin" aria-hidden="true"></i>' +
       (msg.pinned ? '<span>Désépingler</span>' : '<span>Épingler</span>');
-    pinBtn.addEventListener('click', () =>
-      Store.setPinned(currentGroupId, msg.id, !msg.pinned).catch(() => {})
-    );
+    pinBtn.addEventListener('click', () => {
+      if (!msg.pinned && currentMessages.filter((m) => m.pinned).length >= 5) {
+        alert('Maximum 5 messages épinglés par groupe.');
+        return;
+      }
+      Store.setPinned(currentGroupId, msg.id, !msg.pinned).catch(() => {});
+    });
     reactRow.appendChild(pinBtn);
   }
 
@@ -629,10 +603,15 @@ function refreshIcons() {
 }
 
 function renderMessages() {
+  const atBottom =
+    messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 60;
+  const prevTop = messagesEl.scrollTop;
+  const prevHeight = messagesEl.scrollHeight;
   messagesEl.innerHTML = '';
   currentMessages.forEach((msg) => messagesEl.appendChild(buildBubble(msg)));
   refreshIcons();
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+  if (atBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
+  else messagesEl.scrollTop = prevTop + (messagesEl.scrollHeight - prevHeight);
 }
 
 function renderPinned() {
@@ -826,7 +805,7 @@ deleteBtn.addEventListener('click', async () => {
   if (!group) return;
   if (!confirm(`Supprimer le groupe « ${group.name} » ?`)) return;
   try {
-    await Store.deleteGroup(currentGroupId);
+    await Store.deleteGroup(currentGroupId, group.joinCode);
     resetChat();
   } catch (err) {
     alert('Suppression impossible : ' + err.message);
@@ -1014,132 +993,6 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-function blobToDataURL(blob) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result);
-    r.onerror = reject;
-    r.readAsDataURL(blob);
-  });
-}
-
-function resetAudioBar() {
-  audioBar.hidden = true;
-  audioPreview.hidden = true;
-  audioPreview.src = '';
-  audioSend.hidden = true;
-  audioCancel.hidden = true;
-  audioStop.hidden = true;
-  audioStatus.textContent = '';
-  pendingAudio = null;
-}
-
-async function startRecording() {
-  if (!currentGroupId || !currentUser) return;
-  if (!navigator.mediaDevices || !window.MediaRecorder) {
-    alert('Enregistrement non supporté par ce navigateur.');
-    return;
-  }
-  let stream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  } catch {
-    alert('Accès au micro refusé.');
-    return;
-  }
-  audioChunks = [];
-  const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-    ? 'audio/webm;codecs=opus'
-    : '';
-  mediaRecorder = mime
-    ? new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 24000 })
-    : new MediaRecorder(stream);
-  mediaRecorder.ondataavailable = (e) => { if (e.data.size) audioChunks.push(e.data); };
-  mediaRecorder.onstop = async () => {
-    stream.getTracks().forEach((t) => t.stop());
-    await finalizeRecording();
-  };
-  mediaRecorder.start();
-  recSeconds = 0;
-  audioBar.hidden = false;
-  audioPreview.hidden = true;
-  audioSend.hidden = true;
-  audioCancel.hidden = true;
-  audioStop.hidden = false;
-  micBtn.classList.add('recording');
-  audioStatus.textContent = 'Enregistrement… 0s';
-  recTimer = setInterval(() => {
-    recSeconds++;
-    audioStatus.textContent = `Enregistrement… ${recSeconds}s`;
-    if (recSeconds >= REC_MAX_SECONDS) stopRecording();
-  }, 1000);
-}
-
-function stopRecording() {
-  clearInterval(recTimer);
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-}
-
-async function finalizeRecording() {
-  clearInterval(recTimer);
-  micBtn.classList.remove('recording');
-  audioStop.hidden = true;
-  const blob = new Blob(audioChunks, { type: (audioChunks[0] && audioChunks[0].type) || 'audio/webm' });
-  const dataUrl = await blobToDataURL(blob);
-  if (dataUrl.length > AUDIO_MAX_LEN) {
-    alert('Enregistrement trop lourd. Essaie un vocal plus court.');
-    resetAudioBar();
-    return;
-  }
-  pendingAudio = dataUrl;
-  audioPreview.src = dataUrl;
-  audioPreview.hidden = false;
-  audioStatus.textContent = `Vocal ${recSeconds}s`;
-  audioSend.hidden = false;
-  audioCancel.hidden = false;
-}
-
-micBtn.addEventListener('click', () => {
-  if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
-  else startRecording();
-});
-audioStop.addEventListener('click', stopRecording);
-audioCancel.addEventListener('click', resetAudioBar);
-audioSend.addEventListener('click', async () => {
-  if (!pendingAudio || !currentGroupId || !currentUser) return;
-  const audio = pendingAudio;
-  const text = messageInput.value.trim();
-  resetAudioBar();
-  try {
-    await Store.addMessage(currentGroupId, { text, audio, user: currentUser });
-    messageInput.value = '';
-  } catch (err) {
-    alert("Envoi impossible : " + err.message);
-  }
-});
-
-audioInput.addEventListener('change', async () => {
-  const file = audioInput.files && audioInput.files[0];
-  audioInput.value = '';
-  if (!file || !currentGroupId || !currentUser) return;
-  if (!file.type.startsWith('audio/')) return;
-  try {
-    const dataUrl = await blobToDataURL(file);
-    if (dataUrl.length > AUDIO_MAX_LEN) {
-      alert('Fichier audio trop lourd (max ~650 Ko). Choisis un fichier plus court.');
-      return;
-    }
-    await Store.addMessage(currentGroupId, {
-      text: messageInput.value.trim(),
-      audio: dataUrl,
-      user: currentUser,
-    });
-    messageInput.value = '';
-  } catch (err) {
-    alert("Envoi impossible : " + err.message);
-  }
-});
-
 function insertText(t) {
   const el = messageInput;
   const s = el.selectionStart ?? el.value.length;
@@ -1150,64 +1003,18 @@ function insertText(t) {
   el.setSelectionRange(pos, pos);
 }
 
-const emojiFile = document.createElement('input');
-emojiFile.type = 'file';
-emojiFile.accept = 'image/*';
-emojiFile.hidden = true;
-document.body.appendChild(emojiFile);
-
-emojiFile.addEventListener('change', async () => {
-  const f = emojiFile.files && emojiFile.files[0];
-  emojiFile.value = '';
-  if (!f || !currentGroupId || !currentUser) return;
-  let name = prompt('Nom de l’emoji (lettres/chiffres) :');
-  if (!name) return;
-  name = name.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20);
-  if (!name) return;
-  try {
-    const image = await compressImage(f, 64, 20000);
-    await Store.addEmoji(currentGroupId, { name, image, user: currentUser });
-  } catch (err) {
-    alert('Import impossible : ' + err.message);
-  }
-});
-
 function renderEmojiPop() {
   emojiPop.innerHTML = '';
-  const def = document.createElement('div');
-  def.className = 'emoji-grid';
-  EMOJIS.forEach((e) => {
+  const grid = document.createElement('div');
+  grid.className = 'emoji-grid';
+  PICKER_EMOJIS.forEach((e) => {
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = e;
     b.addEventListener('click', () => insertText(e));
-    def.appendChild(b);
+    grid.appendChild(b);
   });
-  emojiPop.appendChild(def);
-
-  if (currentEmojis.length) {
-    const cg = document.createElement('div');
-    cg.className = 'emoji-grid';
-    currentEmojis.forEach((em) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.title = ':' + em.name + ':';
-      const im = document.createElement('img');
-      im.src = em.image;
-      im.alt = em.name;
-      b.appendChild(im);
-      b.addEventListener('click', () => insertText(`:${em.name}:`));
-      cg.appendChild(b);
-    });
-    emojiPop.appendChild(cg);
-  }
-
-  const imp = document.createElement('button');
-  imp.type = 'button';
-  imp.className = 'emoji-import';
-  imp.textContent = '+ Importer un emoji';
-  imp.addEventListener('click', () => emojiFile.click());
-  emojiPop.appendChild(imp);
+  emojiPop.appendChild(grid);
 }
 
 emojiBtn.addEventListener('click', (e) => {
@@ -1225,7 +1032,7 @@ timeBtn.addEventListener('click', () => {
 
 function addPollOptionInput() {
   const inputs = pollOptionsEl.querySelectorAll('input');
-  if (inputs.length >= 6) return;
+  if (inputs.length >= 10) return;
   const i = inputs.length + 1;
   const inp = document.createElement('input');
   inp.className = 'poll-input';
@@ -1236,11 +1043,13 @@ function addPollOptionInput() {
   inp.maxLength = 60;
   inp.autocomplete = 'off';
   pollOptionsEl.appendChild(inp);
+  pollAddOption.hidden = pollOptionsEl.querySelectorAll('input').length >= 10;
 }
 
 function openPoll() {
   pollQuestion.value = '';
   pollOptionsEl.innerHTML = '';
+  pollAddOption.hidden = false;
   addPollOptionInput();
   addPollOptionInput();
   pollOverlay.hidden = false;

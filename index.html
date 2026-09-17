@@ -97,16 +97,6 @@
 
       <div class="typing" id="typing" hidden></div>
 
-      <div class="audio-bar" id="audio-bar" hidden>
-        <span class="audio-status" id="audio-status"></span>
-        <audio class="audio-preview" id="audio-preview" controls hidden></audio>
-        <div class="audio-actions" id="audio-actions">
-          <button class="btn-danger" id="audio-stop" type="button">Stop</button>
-          <button class="btn-ghost" id="audio-cancel" type="button" hidden>Annuler</button>
-          <button class="preview-send" id="audio-send" type="button" hidden>Envoyer</button>
-        </div>
-      </div>
-
       <form class="composer" id="composer" hidden>
         <label class="attach" id="attach-btn" for="image-input" title="Envoyer une image" aria-label="Envoyer une image">
           <i data-lucide="image" aria-hidden="true"></i>
@@ -124,13 +114,6 @@
         <button class="attach" id="time-btn" type="button" title="Insérer un horodatage" aria-label="Insérer un horodatage">
           <i data-lucide="clock" aria-hidden="true"></i>
         </button>
-        <button class="attach" id="mic-btn" type="button" title="Message vocal" aria-label="Enregistrer un message vocal">
-          <i data-lucide="mic" aria-hidden="true"></i>
-        </button>
-        <label class="attach" id="audio-file-btn" for="audio-input" title="Envoyer un fichier audio" aria-label="Envoyer un fichier audio">
-          <i data-lucide="file-audio" aria-hidden="true"></i>
-        </label>
-        <input type="file" id="audio-input" name="audio-input" accept="audio/*" hidden />
         <label class="sr-only" for="message-input">Écris un message</label>
         <input
           type="text"
@@ -211,7 +194,7 @@
     </div>
   </div>
 
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="lucide.min.js" integrity="sha384-43WP8IQ+5H0ncT+LNM4dZnu+hPINYmeOuNMhTvHfszzXdFjBEji77gkq7TyjQl/U" crossorigin="anonymous"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

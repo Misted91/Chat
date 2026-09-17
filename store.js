@@ -11,12 +11,13 @@ import {
   onSnapshot,
   query,
   where,
+  writeBatch,
   serverTimestamp,
   arrayUnion,
   arrayRemove,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
-function makeCode(len = 6) {
+function makeCode(len = 16) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let out = '';
   for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
@@ -79,7 +80,19 @@ export const Store = {
     return ref;
   },
 
-  async deleteGroup(groupId) {
+  async deleteGroup(groupId, joinCode) {
+    const subs = ['messages', 'members', 'typing', 'emojis'];
+    for (const sub of subs) {
+      const snap = await getDocs(collection(db, 'groups', groupId, sub));
+      let batch = writeBatch(db);
+      let n = 0;
+      for (const d of snap.docs) {
+        batch.delete(d.ref);
+        if (++n >= 450) { await batch.commit(); batch = writeBatch(db); n = 0; }
+      }
+      if (n) await batch.commit();
+    }
+    if (joinCode) await deleteDoc(doc(db, 'invites', joinCode)).catch(() => {});
     return deleteDoc(doc(db, 'groups', groupId));
   },
 
@@ -144,20 +157,6 @@ export const Store = {
     return updateDoc(doc(db, 'groups', groupId, 'messages', msg.id), { pollVotes: votes });
   },
 
-  async addEmoji(groupId, { name, image, user }) {
-    return setDoc(doc(db, 'groups', groupId, 'emojis', name), {
-      name,
-      image,
-      by: user.uid,
-    });
-  },
-
-  watchEmojis(groupId, callback) {
-    return onSnapshot(collection(db, 'groups', groupId, 'emojis'), (snap) =>
-      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    );
-  },
-
   async setTyping(groupId, user) {
     return setDoc(doc(db, 'groups', groupId, 'typing', user.uid), {
       name: user.displayName || 'Anonyme',
@@ -209,13 +208,10 @@ export const Store = {
   },
 
   async toggleReaction(groupId, message, emoji, uid) {
-    const reactions = { ...(message.reactions || {}) };
-    const users = new Set(reactions[emoji] || []);
-    if (users.has(uid)) users.delete(uid);
-    else users.add(uid);
-    if (users.size) reactions[emoji] = [...users];
-    else delete reactions[emoji];
-    return updateDoc(doc(db, 'groups', groupId, 'messages', message.id), { reactions });
+    const has = ((message.reactions || {})[emoji] || []).includes(uid);
+    return updateDoc(doc(db, 'groups', groupId, 'messages', message.id), {
+      ['reactions.' + emoji]: has ? arrayRemove(uid) : arrayUnion(uid),
+    });
   },
 
   async setPinned(groupId, msgId, pinned) {
