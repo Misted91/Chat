@@ -55,16 +55,6 @@ const memberList = document.getElementById('member-list');
 const inviteCodeEl = document.getElementById('invite-code');
 const copyInviteBtn = document.getElementById('copy-invite');
 
-// --- Indicateur de diagnostic (temporaire) ---
-const diag = document.createElement('div');
-diag.style.cssText =
-  'padding:8px 16px;font-size:11px;color:#9aa0ab;border-top:1px solid #2a2f3a;white-space:pre-wrap;';
-document.querySelector('.sidebar').appendChild(diag);
-let diagAuth = 'auth: ?';
-let diagGroups = 'groupes: ?';
-function refreshDiag() { diag.textContent = `${diagAuth}\n${diagGroups}`; }
-refreshDiag();
-
 // --- Helpers ---
 function currentGroup() {
   return (
@@ -114,8 +104,6 @@ logoutBtn.addEventListener('click', () => logout());
 
 watchAuth((user) => {
   currentUser = user;
-  diagAuth = user ? 'auth: OK ' + user.uid.slice(0, 6) + '…' : 'auth: déconnecté';
-  refreshDiag();
   if (user) {
     loginOverlay.hidden = true;
     userName.textContent = user.displayName || 'Utilisateur';
@@ -139,38 +127,23 @@ watchAuth((user) => {
 // --- Groupes (deux abonnements fusionnés) ---
 function startGroupsListeners() {
   stopGroupsListeners();
-  diagGroups = 'groupes: écoute…';
-  refreshDiag();
-
   // Chargement immédiat de secours (au cas où le temps réel serait bloqué).
   Store.getMemberGroupsOnce(currentUser.uid)
     .then((list) => {
       if (!memberGroups.length) {
         memberGroups = list;
-        diagGroups = 'groupes: ' + list.length + ' (lecture)';
-        refreshDiag();
         onGroupsChanged();
       }
     })
-    .catch((err) => {
-      console.error(err);
-      diagGroups = 'groupes: ERREUR ' + err.code;
-      refreshDiag();
-    });
+    .catch((err) => console.error('Chargement des groupes :', err));
 
   unsubMember = Store.watchMemberGroups(
     currentUser.uid,
     (list) => {
       memberGroups = list;
-      diagGroups = 'groupes: ' + list.length + ' chargé(s)';
-      refreshDiag();
       onGroupsChanged();
     },
-    (err) => {
-      console.error('Lecture des groupes :', err);
-      diagGroups = 'groupes: ERREUR ' + err.code;
-      refreshDiag();
-    }
+    (err) => console.error('Lecture des groupes :', err)
   );
 }
 function stopGroupsListeners() {
