@@ -48,6 +48,16 @@ const composer = document.getElementById('composer');
 const messageInput = document.getElementById('message-input');
 const imageInput = document.getElementById('image-input');
 const attachBtn = document.getElementById('attach-btn');
+const previewOverlay = document.getElementById('preview-overlay');
+const previewImg = document.getElementById('preview-img');
+const previewSize = document.getElementById('preview-size');
+const previewSend = document.getElementById('preview-send');
+const previewCancel = document.getElementById('preview-cancel');
+const previewClose = document.getElementById('preview-close');
+const lightbox = document.getElementById('lightbox');
+const lightboxImg = document.getElementById('lightbox-img');
+
+let pendingImage = null; // image compressée en attente de validation
 
 const adminOverlay = document.getElementById('admin-overlay');
 const adminClose = document.getElementById('admin-close');
@@ -289,7 +299,7 @@ function buildBubble(msg) {
     img.src = msg.image;
     img.alt = 'image';
     img.loading = 'lazy';
-    img.addEventListener('click', () => window.open(msg.image, '_blank'));
+    img.addEventListener('click', () => openLightbox(msg.image));
     bubble.appendChild(img);
   }
 
@@ -510,8 +520,14 @@ deleteBtn.addEventListener('click', async () => {
 });
 
 // --- Compression d'image côté navigateur (pour économiser Firebase) ---
-// Redimensionne à maxDim px max, exporte en JPEG et réduit la qualité
-// jusqu'à passer sous ~250 Ko (data URL) → messages légers.
+// Redimensionne à maxDim px max, exporte en WebP (repli JPEG) et réduit la
+// qualité jusqu'à passer sous ~250 Ko (data URL) → messages légers.
+function encode(canvas, q) {
+  const webp = canvas.toDataURL('image/webp', q);
+  // Si le navigateur ne gère pas le WebP, il renvoie du PNG → on prend le JPEG.
+  return webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/jpeg', q);
+}
+
 function compressImage(file, maxDim = 1024, maxLen = 260000) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
@@ -528,19 +544,18 @@ function compressImage(file, maxDim = 1024, maxLen = 260000) {
       canvas.height = h;
       canvas.getContext('2d').drawImage(img, 0, 0, w, h);
 
-      let q = 0.72;
-      let out = canvas.toDataURL('image/jpeg', q);
-      // Réduit la qualité, puis la taille, jusqu'à tenir sous maxLen.
+      let q = 0.8;
+      let out = encode(canvas, q);
       while (out.length > maxLen && q > 0.35) {
         q -= 0.1;
-        out = canvas.toDataURL('image/jpeg', q);
+        out = encode(canvas, q);
       }
       if (out.length > maxLen) {
         const c2 = document.createElement('canvas');
         c2.width = Math.round(w * 0.7);
         c2.height = Math.round(h * 0.7);
         c2.getContext('2d').drawImage(img, 0, 0, c2.width, c2.height);
-        out = c2.toDataURL('image/jpeg', 0.6);
+        out = encode(c2, 0.6);
       }
       resolve(out);
     };
@@ -549,32 +564,65 @@ function compressImage(file, maxDim = 1024, maxLen = 260000) {
   });
 }
 
+// Sélection d'une image → compression → prévisualisation (pas d'envoi direct).
 imageInput.addEventListener('change', async () => {
   const file = imageInput.files && imageInput.files[0];
-  imageInput.value = ''; // permet de renvoyer la même image plus tard
+  imageInput.value = '';
   if (!file || !currentGroupId || !currentUser) return;
   if (!file.type.startsWith('image/')) return;
 
   attachBtn.classList.add('busy');
   try {
     const image = await compressImage(file);
-    // Sécurité : reste bien sous la limite Firestore (1 Mo/doc).
     if (image.length > 900000) {
       alert('Image trop lourde même après compression, essaie une image plus petite.');
       return;
     }
-    await Store.addMessage(currentGroupId, {
-      text: messageInput.value.trim(),
-      image,
-      user: currentUser,
-    });
-    messageInput.value = '';
+    pendingImage = image;
+    previewImg.src = image;
+    const kb = Math.round((image.length * 0.75) / 1024);
+    const type = image.startsWith('data:image/webp') ? 'WebP' : 'JPEG';
+    previewSize.textContent = `~${kb} Ko · ${type}`;
+    previewOverlay.hidden = false;
   } catch (err) {
-    console.error(err);
-    alert("Impossible d'envoyer l'image : " + err.message);
+    alert("Impossible de préparer l'image : " + err.message);
   } finally {
     attachBtn.classList.remove('busy');
   }
+});
+
+function closePreview() {
+  previewOverlay.hidden = true;
+  pendingImage = null;
+  previewImg.src = '';
+}
+previewCancel.addEventListener('click', closePreview);
+previewClose.addEventListener('click', closePreview);
+previewOverlay.addEventListener('click', (e) => {
+  if (e.target === previewOverlay) closePreview();
+});
+
+previewSend.addEventListener('click', async () => {
+  if (!pendingImage || !currentGroupId || !currentUser) return;
+  const image = pendingImage;
+  const text = messageInput.value.trim();
+  closePreview();
+  try {
+    await Store.addMessage(currentGroupId, { text, image, user: currentUser });
+    messageInput.value = '';
+  } catch (err) {
+    alert("Impossible d'envoyer l'image : " + err.message);
+  }
+});
+
+// --- Visionneuse plein écran ---
+function openLightbox(src) {
+  lightboxImg.src = src;
+  lightbox.hidden = false;
+}
+lightbox.addEventListener('click', () => {
+  lightbox.hidden = true;
+  lightboxImg.src = '';
 });
 
 // --- Envoi d'un message ---

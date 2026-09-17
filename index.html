@@ -118,6 +118,27 @@
     </div>
   </div>
 
+  <!-- Prévisualisation d'image avant envoi -->
+  <div class="modal-overlay" id="preview-overlay" hidden>
+    <div class="modal preview-modal">
+      <header class="modal__head">
+        <h3>Envoyer l'image</h3>
+        <button class="modal__close" id="preview-close" aria-label="Fermer">✕</button>
+      </header>
+      <img class="preview-img" id="preview-img" alt="Aperçu" />
+      <p class="settings-hint" id="preview-size"></p>
+      <div class="preview-actions">
+        <button type="button" class="btn-ghost" id="preview-cancel">Annuler</button>
+        <button type="button" class="preview-send" id="preview-send">Envoyer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Visionneuse plein écran -->
+  <div class="lightbox" id="lightbox" hidden>
+    <img class="lightbox-img" id="lightbox-img" alt="Image" />
+  </div>
+
   <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -528,6 +528,51 @@ html, body {
 .bubble .text + .bubble-img,
 .bubble-img + .text { margin-top: 6px; }
 
+/* ---------- Prévisualisation d'image ---------- */
+.preview-modal { max-width: 460px; text-align: center; }
+.preview-img {
+  max-width: 100%;
+  max-height: 50vh;
+  border-radius: 10px;
+  margin: 6px 0;
+  object-fit: contain;
+}
+.preview-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.preview-send {
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: white;
+  padding: 9px 18px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.preview-send:hover { background: var(--accent-2); }
+
+/* ---------- Visionneuse plein écran ---------- */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgba(0, 0, 0, .85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  cursor: zoom-out;
+}
+.lightbox-img {
+  max-width: 95%;
+  max-height: 95%;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
 @media (max-width: 720px) {
   .app { grid-template-columns: 1fr; }
   .sidebar { max-height: 42vh; }
