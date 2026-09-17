@@ -58,6 +58,16 @@ const adminClose = document.getElementById('admin-close');
 const memberList = document.getElementById('member-list');
 const inviteCodeEl = document.getElementById('invite-code');
 const copyInviteBtn = document.getElementById('copy-invite');
+const typingEl = document.getElementById('typing');
+const notifBtn = document.getElementById('notif-btn');
+const installBtn = document.getElementById('install-btn');
+
+let unsubTyping = null;
+let typingTimer = null;
+let lastTypingWrite = 0;
+let knownMessageIds = new Set();
+let deferredInstall = null;
+let notifOn = localStorage.getItem('notif') === '1';
 
 function currentGroup() {
   return (
@@ -152,10 +162,12 @@ watchAuth((user) => {
       userAvatar.hidden = false;
     }
     logoutBtn.hidden = false;
+    notifBtn.hidden = false;
     startGroupsListeners();
   } else {
     loginOverlay.hidden = false;
     logoutBtn.hidden = true;
+    notifBtn.hidden = true;
     userAvatar.hidden = true;
     userName.textContent = '';
     stopGroupsListeners();
@@ -273,16 +285,16 @@ async function selectGroup(id) {
 
   if (unsubMessages) unsubMessages();
   messagesEl.innerHTML = '';
+  knownMessageIds = new Set();
   unsubMessages = Store.watchMessages(
     id,
     (messages) => {
+      maybeNotify(messages);
       currentMessages = messages;
       renderMessages();
       renderPinned();
     },
-    (err) => {
-      resetChat();
-    }
+    () => resetChat()
   );
 
   if (unsubMembers) unsubMembers();
@@ -290,9 +302,48 @@ async function selectGroup(id) {
     currentMembers = members;
     if (!adminOverlay.hidden) renderAdminPanel();
   });
+
+  if (unsubTyping) unsubTyping();
+  unsubTyping = Store.watchTyping(id, renderTyping);
+}
+
+function maybeNotify(messages) {
+  const first = knownMessageIds.size === 0;
+  messages.forEach((m) => {
+    const isNew = !knownMessageIds.has(m.id);
+    knownMessageIds.add(m.id);
+    if (first || isNew === false) return;
+    if (m.system || !currentUser || m.author === currentUser.uid) return;
+    if (notifOn && document.hidden && window.Notification && Notification.permission === 'granted') {
+      const body = m.text || (m.image ? 'Image' : '');
+      new Notification(m.authorName || 'Nouveau message', { body });
+    }
+  });
+}
+
+function renderTyping(list) {
+  const now = Date.now();
+  const others = list.filter((t) => {
+    if (!currentUser || t.id === currentUser.uid) return false;
+    const at = t.at && t.at.toMillis ? t.at.toMillis() : 0;
+    return now - at < 6000;
+  });
+  if (others.length === 0) {
+    typingEl.hidden = true;
+    typingEl.textContent = '';
+    return;
+  }
+  const names = others.map((t) => t.name).join(', ');
+  typingEl.hidden = false;
+  typingEl.textContent =
+    others.length === 1 ? `${names} est en train d'écrire…` : `${names} sont en train d'écrire…`;
 }
 
 function resetChat() {
+  if (unsubTyping) { unsubTyping(); unsubTyping = null; }
+  if (currentGroupId && currentUser) Store.clearTyping(currentGroupId, currentUser.uid).catch(() => {});
+  typingEl.hidden = true;
+  typingEl.textContent = '';
   currentGroupId = null;
   currentMessages = [];
   currentMembers = [];
@@ -311,6 +362,15 @@ function resetChat() {
 
 function buildBubble(msg) {
   const group = currentGroup();
+
+  if (msg.system) {
+    const sys = document.createElement('div');
+    sys.className = 'system-msg';
+    sys.dataset.id = msg.id;
+    sys.textContent = msg.text;
+    return sys;
+  }
+
   const isMe = currentUser && msg.author === currentUser.uid;
 
   const row = document.createElement('div');
@@ -570,11 +630,14 @@ function renderMembers(group) {
       transfer.title = 'Transférer les droits admin';
       transfer.setAttribute('aria-label', 'Transférer les droits admin');
       transfer.innerHTML = '<i data-lucide="crown" aria-hidden="true"></i>';
-      transfer.addEventListener('click', () => {
+      transfer.addEventListener('click', async () => {
         if (!confirm(`Donner les droits admin à ${m.name} ? Tu ne seras plus admin.`)) return;
-        Store.transferAdmin(currentGroupId, m.uid).catch((err) =>
-          alert('Action impossible : ' + err.message)
-        );
+        try {
+          await Store.transferAdmin(currentGroupId, m.uid);
+          await Store.addSystemMessage(currentGroupId, `${m.name} est désormais admin`, currentUser);
+        } catch (err) {
+          alert('Action impossible : ' + err.message);
+        }
       });
       right.appendChild(transfer);
 
@@ -582,11 +645,18 @@ function renderMembers(group) {
       const btn = document.createElement('button');
       btn.className = isBanned ? 'btn-ghost' : 'btn-danger';
       btn.textContent = isBanned ? 'Débannir' : 'Bannir';
-      btn.addEventListener('click', () =>
-        Store.setBanned(currentGroupId, m.uid, !isBanned).catch((err) => {
+      btn.addEventListener('click', async () => {
+        try {
+          await Store.setBanned(currentGroupId, m.uid, !isBanned);
+          await Store.addSystemMessage(
+            currentGroupId,
+            `${m.name} a été ${isBanned ? 'débanni' : 'banni'}`,
+            currentUser
+          );
+        } catch (err) {
           alert('Action impossible : ' + err.message);
-        })
-      );
+        }
+      });
       right.appendChild(btn);
     }
     li.appendChild(right);
@@ -743,6 +813,7 @@ composer.addEventListener('submit', async (e) => {
   const text = messageInput.value.trim();
   if (!text || !currentGroupId || !currentUser) return;
   messageInput.value = '';
+  stopTyping();
   try {
     await Store.addMessage(currentGroupId, { text, user: currentUser });
   } catch (err) {
@@ -750,7 +821,75 @@ composer.addEventListener('submit', async (e) => {
   }
 });
 
+function stopTyping() {
+  clearTimeout(typingTimer);
+  typingTimer = null;
+  lastTypingWrite = 0;
+  if (currentGroupId && currentUser) Store.clearTyping(currentGroupId, currentUser.uid).catch(() => {});
+}
+
+messageInput.addEventListener('input', () => {
+  if (!currentGroupId || !currentUser) return;
+  const now = Date.now();
+  if (now - lastTypingWrite > 3000) {
+    lastTypingWrite = now;
+    Store.setTyping(currentGroupId, currentUser).catch(() => {});
+  }
+  clearTimeout(typingTimer);
+  typingTimer = setTimeout(stopTyping, 4000);
+});
+
+function updateNotifButton() {
+  const icon = notifOn ? 'bell' : 'bell-off';
+  notifBtn.innerHTML = `<i data-lucide="${icon}" aria-hidden="true"></i>`;
+  notifBtn.setAttribute(
+    'aria-label',
+    notifOn ? 'Désactiver les notifications' : 'Activer les notifications'
+  );
+  refreshIcons();
+}
+
+notifBtn.addEventListener('click', async () => {
+  if (!window.Notification) {
+    alert('Notifications non supportées par ce navigateur.');
+    return;
+  }
+  if (!notifOn) {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      alert('Autorisation refusée.');
+      return;
+    }
+    notifOn = true;
+  } else {
+    notifOn = false;
+  }
+  localStorage.setItem('notif', notifOn ? '1' : '0');
+  updateNotifButton();
+});
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstall = e;
+  installBtn.hidden = false;
+});
+
+installBtn.addEventListener('click', async () => {
+  if (!deferredInstall) return;
+  deferredInstall.prompt();
+  await deferredInstall.userChoice;
+  deferredInstall = null;
+  installBtn.hidden = true;
+});
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+
 refreshIcons();
+updateNotifButton();
 
 setInterval(() => {
   document.querySelectorAll('.msg-time[data-ms]').forEach((el) => {

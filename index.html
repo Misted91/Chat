@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Groupes de discussion</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>C</text></svg>" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0f1115" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -31,6 +33,12 @@
         <div class="user" id="user-zone">
           <img class="user__avatar" id="user-avatar" alt="" hidden />
           <span class="user__name" id="user-name"></span>
+          <button class="icon-btn" id="install-btn" type="button" hidden aria-label="Installer l'application" title="Installer l'application">
+            <i data-lucide="download" aria-hidden="true"></i>
+          </button>
+          <button class="icon-btn" id="notif-btn" type="button" hidden aria-label="Activer les notifications" title="Activer les notifications">
+            <i data-lucide="bell-off" aria-hidden="true"></i>
+          </button>
           <button class="logout" id="logout-btn" type="button" hidden>Déconnexion</button>
         </div>
       </header>
@@ -86,6 +94,8 @@
       <div class="pinned-bar" id="pinned-bar" hidden></div>
 
       <div class="messages" id="messages"></div>
+
+      <div class="typing" id="typing" hidden></div>
 
       <form class="composer" id="composer" hidden>
         <label class="attach" id="attach-btn" for="image-input" title="Envoyer une image" aria-label="Envoyer une image">

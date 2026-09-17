@@ -64,6 +64,11 @@ service cloud.firestore {
         allow write: if isSignedIn() && request.auth.uid == uid && !pBanned();
       }
 
+      match /typing/{uid} {
+        allow read: if pView();
+        allow write: if isSignedIn() && request.auth.uid == uid && !pBanned();
+      }
+
       match /messages/{messageId} {
         allow read: if pView();
         allow create: if pView()

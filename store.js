@@ -100,6 +100,37 @@ export const Store = {
     return deleteDoc(doc(db, 'groups', groupId, 'messages', msgId));
   },
 
+  async addSystemMessage(groupId, text, user) {
+    return addDoc(collection(db, 'groups', groupId, 'messages'), {
+      text,
+      system: true,
+      image: '',
+      author: user.uid,
+      authorName: '',
+      authorPhoto: '',
+      ts: serverTimestamp(),
+      reactions: {},
+      pinned: false,
+    });
+  },
+
+  async setTyping(groupId, user) {
+    return setDoc(doc(db, 'groups', groupId, 'typing', user.uid), {
+      name: user.displayName || 'Anonyme',
+      at: serverTimestamp(),
+    });
+  },
+
+  async clearTyping(groupId, uid) {
+    return deleteDoc(doc(db, 'groups', groupId, 'typing', uid));
+  },
+
+  watchTyping(groupId, callback) {
+    return onSnapshot(collection(db, 'groups', groupId, 'typing'), (snap) =>
+      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    );
+  },
+
   async transferAdmin(groupId, uid) {
     return updateDoc(doc(db, 'groups', groupId), { createdBy: uid });
   },
@@ -125,6 +156,11 @@ export const Store = {
     if (!inviteSnap.exists()) return null;
     const { groupId } = inviteSnap.data();
     await this.joinGroup(groupId, user);
+    await this.addSystemMessage(
+      groupId,
+      `${user.displayName || 'Quelqu’un'} a rejoint le groupe`,
+      user
+    ).catch(() => {});
     return groupId;
   },
 
