@@ -102,6 +102,18 @@
           <i data-lucide="image" aria-hidden="true"></i>
         </label>
         <input type="file" id="image-input" name="image-input" accept="image/*" hidden />
+        <button class="attach" id="poll-btn" type="button" title="Créer un sondage" aria-label="Créer un sondage">
+          <i data-lucide="bar-chart-3" aria-hidden="true"></i>
+        </button>
+        <div class="emoji-wrap">
+          <button class="attach" id="emoji-btn" type="button" title="Emojis" aria-label="Emojis">
+            <i data-lucide="smile" aria-hidden="true"></i>
+          </button>
+          <div class="emoji-pop" id="emoji-pop" hidden></div>
+        </div>
+        <button class="attach" id="time-btn" type="button" title="Insérer un horodatage" aria-label="Insérer un horodatage">
+          <i data-lucide="clock" aria-hidden="true"></i>
+        </button>
         <label class="sr-only" for="message-input">Écris un message</label>
         <input
           type="text"
@@ -159,6 +171,27 @@
 
   <div class="lightbox" id="lightbox" hidden>
     <img class="lightbox-img" id="lightbox-img" alt="Image" />
+  </div>
+
+  <div class="modal-overlay" id="poll-overlay" hidden>
+    <div class="modal">
+      <header class="modal__head">
+        <h3>Nouveau sondage</h3>
+        <button class="modal__close" id="poll-close" type="button" aria-label="Fermer">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
+      </header>
+      <form id="poll-form">
+        <label class="sr-only" for="poll-question">Question du sondage</label>
+        <input class="poll-input" id="poll-question" name="poll-question" type="text" placeholder="Question…" maxlength="120" autocomplete="off" />
+        <div class="poll-options" id="poll-options"></div>
+        <button class="btn-ghost" id="poll-add-option" type="button">+ Ajouter une option</button>
+        <div class="preview-actions">
+          <button type="button" class="btn-ghost" id="poll-cancel">Annuler</button>
+          <button type="submit" class="preview-send">Créer</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <script src="https://unpkg.com/lucide@latest"></script>

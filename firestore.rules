@@ -69,12 +69,19 @@ service cloud.firestore {
         allow write: if isSignedIn() && request.auth.uid == uid && !pBanned();
       }
 
+      match /emojis/{name} {
+        allow read: if pView();
+        allow create: if pView() && request.resource.data.by == request.auth.uid;
+        allow delete: if pAdmin() || (pView() && resource.data.by == request.auth.uid);
+      }
+
       match /messages/{messageId} {
         allow read: if pView();
         allow create: if pView()
                       && request.resource.data.author == request.auth.uid;
         allow update: if pView() && (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
+          || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pollVotes'])
           || pAdmin()
         );
         allow delete: if pAdmin()

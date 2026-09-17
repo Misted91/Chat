@@ -62,6 +62,21 @@ const typingEl = document.getElementById('typing');
 const notifBtn = document.getElementById('notif-btn');
 const installBtn = document.getElementById('install-btn');
 
+const pollBtn = document.getElementById('poll-btn');
+const pollOverlay = document.getElementById('poll-overlay');
+const pollClose = document.getElementById('poll-close');
+const pollCancel = document.getElementById('poll-cancel');
+const pollForm = document.getElementById('poll-form');
+const pollQuestion = document.getElementById('poll-question');
+const pollOptionsEl = document.getElementById('poll-options');
+const pollAddOption = document.getElementById('poll-add-option');
+const emojiBtn = document.getElementById('emoji-btn');
+const emojiPop = document.getElementById('emoji-pop');
+const timeBtn = document.getElementById('time-btn');
+
+let emojiMap = {};
+let currentEmojis = [];
+let unsubEmojis = null;
 let unsubTyping = null;
 let typingTimer = null;
 let lastTypingWrite = 0;
@@ -96,6 +111,21 @@ function escapeHtml(s) {
   );
 }
 
+function formatDiscordTs(sec, fmt) {
+  const d = new Date(sec * 1000);
+  if (fmt === 'R') {
+    return `<span class="msg-time" data-ms="${d.getTime()}" title="${d.toLocaleString('fr-FR')}">${relativeTime(d)}</span>`;
+  }
+  let out;
+  if (fmt === 't') out = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  else if (fmt === 'T') out = d.toLocaleTimeString('fr-FR');
+  else if (fmt === 'd') out = d.toLocaleDateString('fr-FR');
+  else if (fmt === 'D') out = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  else if (fmt === 'F') out = d.toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' });
+  else out = d.toLocaleString('fr-FR');
+  return `<span class="md-ts">${out}</span>`;
+}
+
 function renderMarkdown(text) {
   let s = escapeHtml(text);
   s = s.replace(/```([\s\S]+?)```/g, (m, c) => `<pre class="md-code">${c.trim()}</pre>`);
@@ -106,6 +136,10 @@ function renderMarkdown(text) {
   s = s.replace(/__([^_\n]+?)__/g, '<u>$1</u>');
   s = s.replace(/_([^_\n]+?)_/g, '<em>$1</em>');
   s = s.replace(/^&gt; ?(.*)$/gm, '<span class="md-quote">$1</span>');
+  s = s.replace(/&lt;t:(\d+)(?::([tTdDfFR]))?&gt;/g, (m, sec, fmt) => formatDiscordTs(Number(sec), fmt || 'f'));
+  s = s.replace(/:([a-zA-Z0-9_]+):/g, (m, name) =>
+    emojiMap[name] ? `<img class="custom-emoji" src="${emojiMap[name]}" alt=":${name}:" />` : m
+  );
   s = s.replace(/\n/g, '<br>');
   return s;
 }
@@ -305,6 +339,14 @@ async function selectGroup(id) {
 
   if (unsubTyping) unsubTyping();
   unsubTyping = Store.watchTyping(id, renderTyping);
+
+  if (unsubEmojis) unsubEmojis();
+  unsubEmojis = Store.watchEmojis(id, (list) => {
+    currentEmojis = list;
+    emojiMap = {};
+    list.forEach((e) => (emojiMap[e.name] = e.image));
+    if (!emojiPop.hidden) renderEmojiPop();
+  });
 }
 
 function maybeNotify(messages) {
@@ -340,6 +382,10 @@ function renderTyping(list) {
 }
 
 function resetChat() {
+  if (unsubEmojis) { unsubEmojis(); unsubEmojis = null; }
+  emojiMap = {};
+  currentEmojis = [];
+  emojiPop.hidden = true;
   if (unsubTyping) { unsubTyping(); unsubTyping = null; }
   if (currentGroupId && currentUser) Store.clearTyping(currentGroupId, currentUser.uid).catch(() => {});
   typingEl.hidden = true;
@@ -424,6 +470,10 @@ function buildBubble(msg) {
     bubble.appendChild(img);
   }
 
+  if (msg.type === 'poll') {
+    bubble.appendChild(buildPoll(msg));
+  }
+
   if (msg.text) {
     const text = document.createElement('span');
     text.className = 'text';
@@ -496,6 +546,55 @@ function buildBubble(msg) {
   bubble.appendChild(reactRow);
   row.appendChild(bubble);
   return row;
+}
+
+function buildPoll(msg) {
+  const wrap = document.createElement('div');
+  wrap.className = 'poll';
+  const q = document.createElement('div');
+  q.className = 'poll-q';
+  q.textContent = msg.question || 'Sondage';
+  wrap.appendChild(q);
+
+  const votes = msg.pollVotes || {};
+  let total = 0;
+  Object.keys(votes).forEach((k) => (total += (votes[k] || []).length));
+
+  (msg.pollOptions || []).forEach((opt, i) => {
+    const voters = votes[String(i)] || [];
+    const pct = total ? Math.round((voters.length / total) * 100) : 0;
+    const mine = currentUser && voters.includes(currentUser.uid);
+
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'poll-opt' + (mine ? ' voted' : '');
+    row.addEventListener('click', () =>
+      Store.votePoll(currentGroupId, msg, i, currentUser.uid).catch(() => {})
+    );
+
+    const bar = document.createElement('span');
+    bar.className = 'poll-bar';
+    bar.style.width = pct + '%';
+
+    const label = document.createElement('span');
+    label.className = 'poll-label';
+    label.textContent = opt;
+
+    const count = document.createElement('span');
+    count.className = 'poll-count';
+    count.textContent = `${pct}% (${voters.length})`;
+
+    row.appendChild(bar);
+    row.appendChild(label);
+    row.appendChild(count);
+    wrap.appendChild(row);
+  });
+
+  const tot = document.createElement('div');
+  tot.className = 'poll-total';
+  tot.textContent = `${total} vote${total > 1 ? 's' : ''}`;
+  wrap.appendChild(tot);
+  return wrap;
 }
 
 function refreshIcons() {
@@ -887,6 +986,137 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   });
 }
+
+function insertText(t) {
+  const el = messageInput;
+  const s = el.selectionStart ?? el.value.length;
+  const e = el.selectionEnd ?? el.value.length;
+  el.value = el.value.slice(0, s) + t + el.value.slice(e);
+  el.focus();
+  const pos = s + t.length;
+  el.setSelectionRange(pos, pos);
+}
+
+const emojiFile = document.createElement('input');
+emojiFile.type = 'file';
+emojiFile.accept = 'image/*';
+emojiFile.hidden = true;
+document.body.appendChild(emojiFile);
+
+emojiFile.addEventListener('change', async () => {
+  const f = emojiFile.files && emojiFile.files[0];
+  emojiFile.value = '';
+  if (!f || !currentGroupId || !currentUser) return;
+  let name = prompt('Nom de l’emoji (lettres/chiffres) :');
+  if (!name) return;
+  name = name.replace(/[^a-zA-Z0-9_]/g, '').slice(0, 20);
+  if (!name) return;
+  try {
+    const image = await compressImage(f, 64, 20000);
+    await Store.addEmoji(currentGroupId, { name, image, user: currentUser });
+  } catch (err) {
+    alert('Import impossible : ' + err.message);
+  }
+});
+
+function renderEmojiPop() {
+  emojiPop.innerHTML = '';
+  const def = document.createElement('div');
+  def.className = 'emoji-grid';
+  EMOJIS.forEach((e) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = e;
+    b.addEventListener('click', () => insertText(e));
+    def.appendChild(b);
+  });
+  emojiPop.appendChild(def);
+
+  if (currentEmojis.length) {
+    const cg = document.createElement('div');
+    cg.className = 'emoji-grid';
+    currentEmojis.forEach((em) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.title = ':' + em.name + ':';
+      const im = document.createElement('img');
+      im.src = em.image;
+      im.alt = em.name;
+      b.appendChild(im);
+      b.addEventListener('click', () => insertText(`:${em.name}:`));
+      cg.appendChild(b);
+    });
+    emojiPop.appendChild(cg);
+  }
+
+  const imp = document.createElement('button');
+  imp.type = 'button';
+  imp.className = 'emoji-import';
+  imp.textContent = '+ Importer un emoji';
+  imp.addEventListener('click', () => emojiFile.click());
+  emojiPop.appendChild(imp);
+}
+
+emojiBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  emojiPop.hidden = !emojiPop.hidden;
+  if (!emojiPop.hidden) renderEmojiPop();
+});
+document.addEventListener('click', (e) => {
+  if (!emojiPop.hidden && !e.target.closest('.emoji-wrap')) emojiPop.hidden = true;
+});
+
+timeBtn.addEventListener('click', () => {
+  insertText(`<t:${Math.floor(Date.now() / 1000)}:R>`);
+});
+
+function addPollOptionInput() {
+  const inputs = pollOptionsEl.querySelectorAll('input');
+  if (inputs.length >= 6) return;
+  const i = inputs.length + 1;
+  const inp = document.createElement('input');
+  inp.className = 'poll-input';
+  inp.type = 'text';
+  inp.id = 'poll-opt-' + i;
+  inp.name = 'poll-opt-' + i;
+  inp.placeholder = 'Option ' + i;
+  inp.maxLength = 60;
+  inp.autocomplete = 'off';
+  pollOptionsEl.appendChild(inp);
+}
+
+function openPoll() {
+  pollQuestion.value = '';
+  pollOptionsEl.innerHTML = '';
+  addPollOptionInput();
+  addPollOptionInput();
+  pollOverlay.hidden = false;
+}
+pollBtn.addEventListener('click', openPoll);
+pollAddOption.addEventListener('click', addPollOptionInput);
+pollClose.addEventListener('click', () => { pollOverlay.hidden = true; });
+pollCancel.addEventListener('click', () => { pollOverlay.hidden = true; });
+pollOverlay.addEventListener('click', (e) => {
+  if (e.target === pollOverlay) pollOverlay.hidden = true;
+});
+
+pollForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const question = pollQuestion.value.trim();
+  const options = [...pollOptionsEl.querySelectorAll('input')]
+    .map((i) => i.value.trim())
+    .filter((v) => v);
+  if (!question || options.length < 2 || !currentGroupId || !currentUser) {
+    alert('Ajoute une question et au moins 2 options.');
+    return;
+  }
+  pollOverlay.hidden = true;
+  try {
+    await Store.addPoll(currentGroupId, { question, options, user: currentUser });
+  } catch (err) {
+    alert('Sondage impossible : ' + err.message);
+  }
+});
 
 refreshIcons();
 updateNotifButton();

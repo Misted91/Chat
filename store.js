@@ -114,6 +114,49 @@ export const Store = {
     });
   },
 
+  async addPoll(groupId, { question, options, user }) {
+    return addDoc(collection(db, 'groups', groupId, 'messages'), {
+      type: 'poll',
+      question: question.trim(),
+      pollOptions: options,
+      pollVotes: {},
+      text: '',
+      image: '',
+      author: user.uid,
+      authorName: user.displayName || 'Anonyme',
+      authorPhoto: user.photoURL || '',
+      ts: serverTimestamp(),
+      reactions: {},
+      pinned: false,
+    });
+  },
+
+  async votePoll(groupId, msg, index, uid) {
+    const votes = {};
+    const old = msg.pollVotes || {};
+    Object.keys(old).forEach((k) => {
+      votes[k] = (old[k] || []).filter((u) => u !== uid);
+    });
+    const key = String(index);
+    const already = (old[key] || []).includes(uid);
+    if (!already) votes[key] = [...(votes[key] || []), uid];
+    return updateDoc(doc(db, 'groups', groupId, 'messages', msg.id), { pollVotes: votes });
+  },
+
+  async addEmoji(groupId, { name, image, user }) {
+    return setDoc(doc(db, 'groups', groupId, 'emojis', name), {
+      name,
+      image,
+      by: user.uid,
+    });
+  },
+
+  watchEmojis(groupId, callback) {
+    return onSnapshot(collection(db, 'groups', groupId, 'emojis'), (snap) =>
+      callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    );
+  },
+
   async setTyping(groupId, user) {
     return setDoc(doc(db, 'groups', groupId, 'typing', user.uid), {
       name: user.displayName || 'Anonyme',
