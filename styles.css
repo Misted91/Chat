@@ -827,6 +827,50 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
 .poll-options { display: flex; flex-direction: column; }
 #poll-form { margin-top: 14px; }
 
+.rename-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.preview-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin: 6px 0;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.preview-thumb { position: relative; }
+.preview-thumb img {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+.preview-thumb__rm {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: var(--danger);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.preview-thumb__rm [data-lucide] { width: 13px; height: 13px; }
+
 .emoji-wrap { position: relative; display: flex; }
 .emoji-pop {
   position: absolute;

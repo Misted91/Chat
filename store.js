@@ -72,6 +72,7 @@ export const Store = {
       createdBy: user.uid,
       createdByName: user.displayName || 'Anonyme',
       memberUids: [user.uid],
+      adminUids: [],
       bannedUids: [],
       joinCode: code,
     });
@@ -190,6 +191,16 @@ export const Store = {
 
   async transferAdmin(groupId, uid) {
     return updateDoc(doc(db, 'groups', groupId), { createdBy: uid });
+  },
+
+  async renameGroup(groupId, name) {
+    return updateDoc(doc(db, 'groups', groupId), { name: name.trim() });
+  },
+
+  async setAdmin(groupId, uid, make) {
+    return updateDoc(doc(db, 'groups', groupId), {
+      adminUids: make ? arrayUnion(uid) : arrayRemove(uid),
+    });
   },
 
   async joinGroup(groupId, user) {

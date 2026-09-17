@@ -173,6 +173,14 @@
         </button>
       </header>
 
+      <div class="settings-block" id="rename-block" hidden>
+        <label class="settings-label" for="rename-input">Nom du groupe</label>
+        <div class="invite-row">
+          <input class="rename-input" id="rename-input" name="rename-input" type="text" maxlength="40" autocomplete="off" />
+          <button type="button" class="btn-ghost" id="rename-save">Renommer</button>
+        </div>
+      </div>
+
       <div class="settings-block">
         <span class="settings-label">Code d'invitation</span>
         <div class="invite-row">
@@ -204,7 +212,8 @@
           <i data-lucide="x" aria-hidden="true"></i>
         </button>
       </header>
-      <img class="preview-img" id="preview-img" alt="Aperçu" />
+      <img class="preview-img" id="preview-img" alt="Aperçu" hidden />
+      <div class="preview-thumbs" id="preview-thumbs"></div>
       <p class="settings-hint" id="preview-size"></p>
       <div class="preview-actions">
         <button type="button" class="btn-ghost" id="preview-cancel">Annuler</button>

@@ -26,7 +26,10 @@ service cloud.firestore {
         return isSignedIn() && ('memberUids' in d) && d.memberUids.hasAny([request.auth.uid]);
       }
       function selfAdmin(d) {
-        return isSignedIn() && request.auth.uid == d.createdBy;
+        return isSignedIn() && (
+          request.auth.uid == d.createdBy
+          || (('adminUids' in d) && d.adminUids.hasAny([request.auth.uid]))
+        );
       }
       // Auto-adhésion : la seule modif est l'ajout de son propre uid à memberUids.
       function isSelfJoin() {
@@ -42,7 +45,7 @@ service cloud.firestore {
       allow create: if isSignedIn()
                     && request.resource.data.createdBy == request.auth.uid;
       allow update: if selfAdmin(resource.data) || isSelfJoin();
-      allow delete: if selfAdmin(resource.data);
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.createdBy;
 
       // --- Pour les sous-collections : on doit consulter le groupe parent. ---
       function parent() {
@@ -56,7 +59,13 @@ service cloud.firestore {
         let g = parent();
         return isSignedIn() && ('memberUids' in g) && g.memberUids.hasAny([request.auth.uid]);
       }
-      function pAdmin() { return isSignedIn() && request.auth.uid == parent().createdBy; }
+      function pAdmin() {
+        let g = parent();
+        return isSignedIn() && (
+          request.auth.uid == g.createdBy
+          || (('adminUids' in g) && g.adminUids.hasAny([request.auth.uid]))
+        );
+      }
       function pView() { return isSignedIn() && !pBanned() && (pMember() || pAdmin()); }
 
       match /members/{uid} {
