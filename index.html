@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="login-overlay" id="login-overlay">
+  <div class="login-overlay" id="login-overlay" hidden>
     <div class="login-card">
       <h1>Groupes de discussion</h1>
       <p>Connecte-toi pour créer des groupes et discuter.</p>
@@ -123,31 +123,43 @@
       <div class="mention-pop" id="mention-pop" hidden></div>
 
       <form class="composer" id="composer" hidden>
-        <label class="attach" id="attach-btn" for="image-input" title="Envoyer une image" aria-label="Envoyer une image">
-          <i data-lucide="image" aria-hidden="true"></i>
-        </label>
-        <input type="file" id="image-input" name="image-input" accept="image/*" hidden />
-        <button class="attach" id="poll-btn" type="button" title="Créer un sondage" aria-label="Créer un sondage">
-          <i data-lucide="bar-chart-3" aria-hidden="true"></i>
-        </button>
+        <input type="file" id="image-input" name="image-input" accept="image/*,.gif,.heic,.heif" multiple hidden />
+        <div class="plus-wrap">
+          <button class="attach plus-btn" id="plus-btn" type="button" title="Ajouter" aria-label="Ajouter un média">
+            <i data-lucide="plus" aria-hidden="true"></i>
+          </button>
+          <div class="plus-menu" id="plus-menu" hidden>
+            <label class="plus-item" for="image-input">
+              <i data-lucide="image" aria-hidden="true"></i><span>Image(s)</span>
+            </label>
+            <button class="plus-item" id="url-btn" type="button">
+              <i data-lucide="link" aria-hidden="true"></i><span>Média par URL</span>
+            </button>
+            <button class="plus-item" id="poll-btn" type="button">
+              <i data-lucide="bar-chart-3" aria-hidden="true"></i><span>Sondage</span>
+            </button>
+            <button class="plus-item" id="time-btn" type="button">
+              <i data-lucide="clock" aria-hidden="true"></i><span>Horodatage</span>
+            </button>
+          </div>
+        </div>
         <div class="emoji-wrap">
           <button class="attach" id="emoji-btn" type="button" title="Emojis" aria-label="Emojis">
             <i data-lucide="smile" aria-hidden="true"></i>
           </button>
           <div class="emoji-pop" id="emoji-pop" hidden></div>
         </div>
-        <button class="attach" id="time-btn" type="button" title="Insérer un horodatage" aria-label="Insérer un horodatage">
-          <i data-lucide="clock" aria-hidden="true"></i>
-        </button>
         <label class="sr-only" for="message-input">Écris un message</label>
-        <input
-          type="text"
+        <textarea
           id="message-input"
           name="message-input"
-          placeholder="Écris un message…"
+          rows="1"
+          placeholder="Écris un message…  (Entrée pour envoyer, Maj+Entrée pour une ligne)"
           autocomplete="off"
-        />
-        <button type="submit">Envoyer</button>
+        ></textarea>
+        <button class="send-btn" type="submit" aria-label="Envoyer">
+          <i data-lucide="send" aria-hidden="true"></i>
+        </button>
       </form>
     </main>
   </div>
@@ -223,6 +235,18 @@
           <button type="submit" class="preview-send">Créer</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toast-wrap" aria-live="polite"></div>
+
+  <div class="modal-overlay" id="confirm-overlay" hidden>
+    <div class="modal confirm-modal">
+      <p class="confirm-text" id="confirm-text"></p>
+      <div class="preview-actions">
+        <button type="button" class="btn-ghost" id="confirm-no">Annuler</button>
+        <button type="button" class="btn-danger" id="confirm-yes">Confirmer</button>
+      </div>
     </div>
   </div>
 

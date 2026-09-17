@@ -82,11 +82,19 @@ service cloud.firestore {
           && d.keys().hasOnly([
             'text', 'image', 'audio', 'author', 'authorName', 'authorPhoto',
             'ts', 'reactions', 'pinned', 'system', 'type', 'question',
-            'pollOptions', 'pollVotes', 'replyTo', 'replyToName', 'replyToText', 'mentions'
+            'pollOptions', 'pollVotes', 'replyTo', 'replyToName', 'replyToText',
+            'mentions', 'edited'
           ])
-          && d.text is string && d.text.size() <= 5000
-          && (!('image' in d) || (d.image is string && d.image.size() <= 1500000))
-          && (!('audio' in d) || (d.audio is string && d.audio.size() <= 1500000));
+          && d.text is string && d.text.size() <= 4000
+          && (!('image' in d) || (d.image is string && d.image.size() <= 1000000))
+          && (!('audio' in d) || (d.audio is string && d.audio.size() <= 1000000));
+      }
+
+      function editByAuthor() {
+        return resource.data.author == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'edited'])
+          && request.resource.data.text is string
+          && request.resource.data.text.size() <= 4000;
       }
 
       match /messages/{messageId} {
@@ -95,6 +103,7 @@ service cloud.firestore {
         allow update: if pView() && (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
           || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pollVotes'])
+          || editByAuthor()
           || pAdmin()
         );
         allow delete: if pAdmin()

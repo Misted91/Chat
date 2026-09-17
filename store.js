@@ -121,6 +121,13 @@ export const Store = {
     return deleteDoc(doc(db, 'groups', groupId, 'messages', msgId));
   },
 
+  async editMessage(groupId, msgId, text) {
+    return updateDoc(doc(db, 'groups', groupId, 'messages', msgId), {
+      text: text.trim(),
+      edited: true,
+    });
+  },
+
   async addSystemMessage(groupId, text, user) {
     return addDoc(collection(db, 'groups', groupId, 'messages'), {
       text,
