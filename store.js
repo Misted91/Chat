@@ -96,8 +96,8 @@ export const Store = {
     return deleteDoc(doc(db, 'groups', groupId));
   },
 
-  async addMessage(groupId, { text = '', image = '', audio = '', user }) {
-    return addDoc(collection(db, 'groups', groupId, 'messages'), {
+  async addMessage(groupId, { text = '', image = '', audio = '', user, reply = null, mentions = [] }) {
+    const data = {
       text: text.trim(),
       image,
       audio,
@@ -107,7 +107,14 @@ export const Store = {
       ts: serverTimestamp(),
       reactions: {},
       pinned: false,
-    });
+      mentions,
+    };
+    if (reply) {
+      data.replyTo = reply.id;
+      data.replyToName = reply.name;
+      data.replyToText = reply.text;
+    }
+    return addDoc(collection(db, 'groups', groupId, 'messages'), data);
   },
 
   async deleteMessage(groupId, msgId) {

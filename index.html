@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Groupes de discussion</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>C</text></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='5' fill='%230f1115'/><path fill='%235b8cff' d='M5 5h14a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 16H10l-4 3v-3H5a1.5 1.5 0 0 1-1.5-1.5v-8A1.5 1.5 0 0 1 5 5z'/></svg>" />
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#0f1115" />
   <link rel="stylesheet" href="styles.css" />
@@ -36,9 +36,17 @@
           <button class="icon-btn" id="install-btn" type="button" hidden aria-label="Installer l'application" title="Installer l'application">
             <i data-lucide="download" aria-hidden="true"></i>
           </button>
-          <button class="icon-btn" id="notif-btn" type="button" hidden aria-label="Activer les notifications" title="Activer les notifications">
-            <i data-lucide="bell-off" aria-hidden="true"></i>
-          </button>
+          <div class="notif-wrap">
+            <button class="icon-btn" id="notif-btn" type="button" hidden aria-label="Préférences de notifications" title="Notifications">
+              <i data-lucide="bell" aria-hidden="true"></i>
+            </button>
+            <div class="notif-menu" id="notif-menu" hidden>
+              <span class="notif-menu__title">Notifications</span>
+              <button type="button" data-v="all">Toutes</button>
+              <button type="button" data-v="mentions">Mentions seulement</button>
+              <button type="button" data-v="none">Aucune</button>
+            </div>
+          </div>
           <button class="logout" id="logout-btn" type="button" hidden>Déconnexion</button>
         </div>
       </header>
@@ -95,7 +103,24 @@
 
       <div class="messages" id="messages"></div>
 
+      <button class="scroll-down" id="scroll-down" type="button" hidden aria-label="Descendre en bas de la conversation">
+        <i data-lucide="arrow-down" aria-hidden="true"></i>
+      </button>
+
       <div class="typing" id="typing" hidden></div>
+
+      <div class="reply-bar" id="reply-bar" hidden>
+        <i data-lucide="reply" aria-hidden="true"></i>
+        <div class="reply-bar__info">
+          <span class="reply-bar__name" id="reply-bar-name"></span>
+          <span class="reply-bar__text" id="reply-bar-text"></span>
+        </div>
+        <button class="icon-btn" id="reply-cancel" type="button" aria-label="Annuler la réponse">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <div class="mention-pop" id="mention-pop" hidden></div>
 
       <form class="composer" id="composer" hidden>
         <label class="attach" id="attach-btn" for="image-input" title="Envoyer une image" aria-label="Envoyer une image">
@@ -143,6 +168,13 @@
           <button type="button" class="btn-ghost" id="copy-invite">Copier</button>
         </div>
         <p class="settings-hint">Partage ce code pour laisser quelqu'un rejoindre le groupe.</p>
+      </div>
+
+      <div class="settings-block">
+        <label class="settings-check" for="group-notif">
+          <input type="checkbox" id="group-notif" name="group-notif" />
+          <span>Notifications pour ce groupe</span>
+        </label>
       </div>
 
       <div class="settings-block">
