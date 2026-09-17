@@ -80,6 +80,42 @@ function mergeGroups() {
     .sort((a, b) => (a.createdAt?.toMillis?.() || 0) - (b.createdAt?.toMillis?.() || 0));
 }
 
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+  );
+}
+
+function renderMarkdown(text) {
+  let s = escapeHtml(text);
+  s = s.replace(/```([\s\S]+?)```/g, (m, c) => `<pre class="md-code">${c.trim()}</pre>`);
+  s = s.replace(/`([^`\n]+?)`/g, '<code class="md-inline">$1</code>');
+  s = s.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/~~([^~]+?)~~/g, '<del>$1</del>');
+  s = s.replace(/\*([^*\n]+?)\*/g, '<em>$1</em>');
+  s = s.replace(/__([^_\n]+?)__/g, '<u>$1</u>');
+  s = s.replace(/_([^_\n]+?)_/g, '<em>$1</em>');
+  s = s.replace(/^&gt; ?(.*)$/gm, '<span class="md-quote">$1</span>');
+  s = s.replace(/\n/g, '<br>');
+  return s;
+}
+
+function relativeTime(date) {
+  const sec = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (sec < 45) return "à l'instant";
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `il y a ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `il y a ${h} h`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `il y a ${d} j`;
+  return date.toLocaleDateString('fr-FR');
+}
+
+function initials(name) {
+  return (name || '?').trim().charAt(0).toUpperCase();
+}
+
 function authErrorMessage(err) {
   if (err.code === 'auth/operation-not-allowed')
     return "La connexion Google n'est pas activée dans la console Firebase.";
@@ -174,7 +210,7 @@ function onGroupsChanged() {
       return;
     }
     chatTitle.textContent = group.name;
-    adminBtn.hidden = !isAdminOf(group);
+    adminBtn.hidden = false;
     deleteBtn.hidden = !isAdminOf(group);
     if (!adminOverlay.hidden) renderAdminPanel();
   }
@@ -229,7 +265,7 @@ async function selectGroup(id) {
 
   chatTitle.textContent = group.name;
   deleteBtn.hidden = !isAdminOf(group);
-  adminBtn.hidden = !isAdminOf(group);
+  adminBtn.hidden = false;
   composer.hidden = false;
   renderGroups();
 
@@ -276,6 +312,23 @@ function resetChat() {
 function buildBubble(msg) {
   const group = currentGroup();
   const isMe = currentUser && msg.author === currentUser.uid;
+
+  const row = document.createElement('div');
+  row.className = 'msg-row' + (isMe ? ' me' : '');
+  row.dataset.id = msg.id;
+
+  const avatar = document.createElement('div');
+  avatar.className = 'msg-avatar';
+  if (msg.authorPhoto) {
+    const im = document.createElement('img');
+    im.src = msg.authorPhoto;
+    im.alt = '';
+    avatar.appendChild(im);
+  } else {
+    avatar.textContent = initials(msg.authorName);
+  }
+  row.appendChild(avatar);
+
   const bubble = document.createElement('div');
   bubble.className = 'bubble' + (isMe ? ' me' : '') + (msg.pinned ? ' pinned' : '');
   bubble.dataset.id = msg.id;
@@ -283,8 +336,15 @@ function buildBubble(msg) {
   const meta = document.createElement('span');
   meta.className = 'meta';
   const date = msg.ts && msg.ts.toDate ? msg.ts.toDate() : new Date();
-  const time = date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  meta.textContent = `${msg.authorName || 'Anonyme'} · ${time}`;
+  const who = document.createElement('span');
+  who.textContent = `${msg.authorName || 'Anonyme'} · `;
+  const timeEl = document.createElement('span');
+  timeEl.className = 'msg-time';
+  timeEl.dataset.ms = date.getTime();
+  timeEl.title = date.toLocaleString('fr-FR');
+  timeEl.textContent = relativeTime(date);
+  meta.appendChild(who);
+  meta.appendChild(timeEl);
   if (msg.pinned) {
     const pinIcon = document.createElement('i');
     pinIcon.setAttribute('data-lucide', 'pin');
@@ -307,7 +367,7 @@ function buildBubble(msg) {
   if (msg.text) {
     const text = document.createElement('span');
     text.className = 'text';
-    text.textContent = msg.text;
+    text.innerHTML = renderMarkdown(msg.text);
     bubble.appendChild(text);
   }
 
@@ -359,8 +419,23 @@ function buildBubble(msg) {
     reactRow.appendChild(pinBtn);
   }
 
+  if (isMe || isAdminOf(group)) {
+    const delBtn = document.createElement('button');
+    delBtn.className = 'reaction del-btn';
+    delBtn.setAttribute('aria-label', 'Supprimer le message');
+    delBtn.innerHTML = '<i data-lucide="trash-2" aria-hidden="true"></i>';
+    delBtn.addEventListener('click', () => {
+      if (!confirm('Supprimer ce message ?')) return;
+      Store.deleteMessage(currentGroupId, msg.id).catch((err) =>
+        alert('Suppression impossible : ' + err.message)
+      );
+    });
+    reactRow.appendChild(delBtn);
+  }
+
   bubble.appendChild(reactRow);
-  return bubble;
+  row.appendChild(bubble);
+  return row;
 }
 
 function refreshIcons() {
@@ -450,6 +525,7 @@ function renderAdminPanel() {
 function renderMembers(group) {
   memberList.innerHTML = '';
   const banned = group.bannedUids || [];
+  const iAmAdmin = isAdminOf(group);
 
   if (currentMembers.length === 0) {
     const li = document.createElement('li');
@@ -462,9 +538,24 @@ function renderMembers(group) {
   currentMembers.forEach((m) => {
     const li = document.createElement('li');
     li.className = 'member';
+
+    const idcol = document.createElement('span');
+    idcol.className = 'member__id';
+    const av = document.createElement('span');
+    av.className = 'member__avatar';
+    if (m.photo) {
+      const im = document.createElement('img');
+      im.src = m.photo;
+      im.alt = '';
+      av.appendChild(im);
+    } else {
+      av.textContent = initials(m.name);
+    }
     const name = document.createElement('span');
     name.textContent = m.name || 'Anonyme';
-    li.appendChild(name);
+    idcol.appendChild(av);
+    idcol.appendChild(name);
+    li.appendChild(idcol);
 
     const right = document.createElement('span');
     right.className = 'member__right';
@@ -473,7 +564,20 @@ function renderMembers(group) {
       tag.className = 'tag';
       tag.textContent = 'admin';
       right.appendChild(tag);
-    } else {
+    } else if (iAmAdmin) {
+      const transfer = document.createElement('button');
+      transfer.className = 'icon-btn';
+      transfer.title = 'Transférer les droits admin';
+      transfer.setAttribute('aria-label', 'Transférer les droits admin');
+      transfer.innerHTML = '<i data-lucide="crown" aria-hidden="true"></i>';
+      transfer.addEventListener('click', () => {
+        if (!confirm(`Donner les droits admin à ${m.name} ? Tu ne seras plus admin.`)) return;
+        Store.transferAdmin(currentGroupId, m.uid).catch((err) =>
+          alert('Action impossible : ' + err.message)
+        );
+      });
+      right.appendChild(transfer);
+
       const isBanned = banned.includes(m.uid);
       const btn = document.createElement('button');
       btn.className = isBanned ? 'btn-ghost' : 'btn-danger';
@@ -488,6 +592,7 @@ function renderMembers(group) {
     li.appendChild(right);
     memberList.appendChild(li);
   });
+  refreshIcons();
 }
 
 newGroupForm.addEventListener('submit', async (e) => {
@@ -646,3 +751,9 @@ composer.addEventListener('submit', async (e) => {
 });
 
 refreshIcons();
+
+setInterval(() => {
+  document.querySelectorAll('.msg-time[data-ms]').forEach((el) => {
+    el.textContent = relativeTime(new Date(Number(el.dataset.ms)));
+  });
+}, 60000);

@@ -72,7 +72,8 @@ service cloud.firestore {
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
           || pAdmin()
         );
-        allow delete: if pAdmin();
+        allow delete: if pAdmin()
+                      || (pView() && resource.data.author == request.auth.uid);
       }
     }
   }

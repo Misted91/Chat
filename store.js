@@ -89,10 +89,19 @@ export const Store = {
       image,
       author: user.uid,
       authorName: user.displayName || 'Anonyme',
+      authorPhoto: user.photoURL || '',
       ts: serverTimestamp(),
       reactions: {},
       pinned: false,
     });
+  },
+
+  async deleteMessage(groupId, msgId) {
+    return deleteDoc(doc(db, 'groups', groupId, 'messages', msgId));
+  },
+
+  async transferAdmin(groupId, uid) {
+    return updateDoc(doc(db, 'groups', groupId), { createdBy: uid });
   },
 
   async joinGroup(groupId, user) {
@@ -104,6 +113,7 @@ export const Store = {
       {
         uid: user.uid,
         name: user.displayName || 'Anonyme',
+        photo: user.photoURL || '',
         joinedAt: serverTimestamp(),
       },
       { merge: true }
