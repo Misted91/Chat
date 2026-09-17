@@ -25,6 +25,9 @@ service cloud.firestore {
       function selfMember(d) {
         return isSignedIn() && ('memberUids' in d) && d.memberUids.hasAny([request.auth.uid]);
       }
+      function selfPublic(d) {
+        return ('visibility' in d) && d.visibility == 'public';
+      }
       function selfAdmin(d) {
         return isSignedIn() && (
           request.auth.uid == d.createdBy
@@ -41,7 +44,7 @@ service cloud.firestore {
       }
 
       allow read: if isSignedIn() && !selfBanned(resource.data)
-                  && (selfMember(resource.data) || selfAdmin(resource.data));
+                  && (selfMember(resource.data) || selfAdmin(resource.data) || selfPublic(resource.data));
       allow create: if isSignedIn()
                     && request.resource.data.createdBy == request.auth.uid;
       allow update: if selfAdmin(resource.data) || isSelfJoin();
@@ -66,7 +69,11 @@ service cloud.firestore {
           || (('adminUids' in g) && g.adminUids.hasAny([request.auth.uid]))
         );
       }
-      function pView() { return isSignedIn() && !pBanned() && (pMember() || pAdmin()); }
+      function pPublic() {
+        let g = parent();
+        return ('visibility' in g) && g.visibility == 'public';
+      }
+      function pView() { return isSignedIn() && !pBanned() && (pMember() || pAdmin() || pPublic()); }
 
       match /members/{uid} {
         allow read: if pView();

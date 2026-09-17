@@ -735,7 +735,13 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
 }
 .settings-hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
 
+.group-vis { width: 14px; height: 14px; flex: none; color: var(--muted); }
+.group-item.active .group-vis { color: #fff; }
+.group-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .toggle { display: flex; gap: 8px; }
+.toggle button { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.toggle [data-lucide] { width: 16px; height: 16px; }
 .toggle button {
   flex: 1;
   border: 1px solid var(--border);

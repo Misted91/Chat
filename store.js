@@ -26,6 +26,19 @@ function makeCode(len = 16) {
 
 export const Store = {
 
+  watchPublicGroups(callback, onError) {
+    const q = query(collection(db, 'groups'), where('visibility', '==', 'public'));
+    return onSnapshot(
+      q,
+      (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+      onError
+    );
+  },
+
+  async setVisibility(groupId, visibility) {
+    return updateDoc(doc(db, 'groups', groupId), { visibility });
+  },
+
   watchMemberGroups(uid, callback, onError) {
     const q = query(collection(db, 'groups'), where('memberUids', 'array-contains', uid));
     return onSnapshot(
@@ -71,6 +84,7 @@ export const Store = {
       createdAt: serverTimestamp(),
       createdBy: user.uid,
       createdByName: user.displayName || 'Anonyme',
+      visibility: 'private',
       memberUids: [user.uid],
       adminUids: [],
       bannedUids: [],

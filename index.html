@@ -173,6 +173,19 @@
         </button>
       </header>
 
+      <div class="settings-block" id="visibility-block" hidden>
+        <span class="settings-label">Visibilité</span>
+        <div class="toggle" id="visibility-toggle">
+          <button type="button" id="vis-public" data-value="public">
+            <i data-lucide="globe" aria-hidden="true"></i><span>Public</span>
+          </button>
+          <button type="button" id="vis-private" data-value="private">
+            <i data-lucide="lock" aria-hidden="true"></i><span>Privé</span>
+          </button>
+        </div>
+        <p class="settings-hint" id="visibility-hint"></p>
+      </div>
+
       <div class="settings-block" id="rename-block" hidden>
         <label class="settings-label" for="rename-input">Nom du groupe</label>
         <div class="invite-row">
