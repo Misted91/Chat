@@ -1,0 +1,94 @@
+diff --git a/store.js b/store.js
+--- a/store.js
++++ b/store.js
+@@ -16,7 +16,7 @@
+   arrayRemove,
+ } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+ 
+-function makeCode(len = 6) {
++function makeCode(len = 8) {
+   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+   let out = '';
+   for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
+@@ -80,6 +80,13 @@
+   },
+ 
+   async deleteGroup(groupId) {
++    // Supprime aussi l'invitation associée pour ne pas laisser un code
++    // orphelin qui pointerait vers un groupe supprimé.
++    const snap = await getDoc(doc(db, 'groups', groupId));
++    const code = snap.exists() ? snap.data().joinCode : null;
++    if (code) {
++      await deleteDoc(doc(db, 'invites', code)).catch(() => {});
++    }
+     return deleteDoc(doc(db, 'groups', groupId));
+   },
+ 
+@@ -119,13 +126,13 @@
+   },
+ 
+   async toggleReaction(groupId, message, emoji, uid) {
+-    const reactions = { ...(message.reactions || {}) };
+-    const users = new Set(reactions[emoji] || []);
+-    if (users.has(uid)) users.delete(uid);
+-    else users.add(uid);
+-    if (users.size) reactions[emoji] = [...users];
+-    else delete reactions[emoji];
+-    return updateDoc(doc(db, 'groups', groupId, 'messages', message.id), { reactions });
++    // Update ciblé via FieldValue : on n'écrase plus toute la map reactions,
++    // impossible d'altérer ou d'effacer les réactions des autres.
++    const mine = ((message.reactions || {})[emoji] || []).includes(uid);
++    const field = `reactions.${emoji}`;
++    return updateDoc(doc(db, 'groups', groupId, 'messages', message.id), {
++      [field]: mine ? arrayRemove(uid) : arrayUnion(uid),
++    });
+   },
+ 
+   async setPinned(groupId, msgId, pinned) {
+diff --git a/firestore.rules b/firestore.rules
+--- a/firestore.rules
++++ b/firestore.rules
+@@ -67,9 +67,29 @@
+       match /messages/{messageId} {
+         allow read: if pView();
+         allow create: if pView()
+-                      && request.resource.data.author == request.auth.uid;
++                      && request.resource.data.author == request.auth.uid
++                      // Schéma et tailles bornées : un client ne peut plus
++                      // écrire de messages surdimensionnés ou de champs
++                      // arbitraires en contournant l'interface.
++                      && request.resource.data.keys().hasOnly(
++                           ['text', 'image', 'author', 'authorName', 'ts',
++                            'reactions', 'pinned'])
++                      && request.resource.data.text is string
++                      && request.resource.data.text.size() <= 2000
++                      && request.resource.data.image is string
++                      && request.resource.data.image.size() <= 900000
++                      && (request.resource.data.image.size() == 0
++                          || request.resource.data.image.matches(
++                               'data:image/(webp|jpeg|png);base64,.*'))
++                      && request.resource.data.reactions is map
++                      && request.resource.data.reactions.size() == 0
++                      && request.resource.data.pinned == false;
+         allow update: if pView() && (
+-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
++          // Réactions : seule la map reactions peut bouger, et uniquement en
++          // ajout/retrait de son propre uid (voir store.js, FieldValue).
++          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
++           && request.resource.data.reactions is map
++           && request.resource.data.reactions.size() <= 50)
+           || pAdmin()
+         );
+         allow delete: if pAdmin();
+diff --git a/index.html b/index.html
+--- a/index.html
++++ b/index.html
+@@ -151,7 +151,7 @@
+     <img class="lightbox-img" id="lightbox-img" alt="Image" />
+   </div>
+ 
+-  <script src="https://unpkg.com/lucide@latest"></script>
++  <script src="https://unpkg.com/lucide@0.525.0/dist/umd/lucide.min.js"></script>
+   <script type="module" src="app.js"></script>
+ </body>
+ </html>
