@@ -16,7 +16,7 @@ import {
   arrayRemove,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
-function makeCode(len = 6) {
+function makeCode(len = 8) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let out = '';
   for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
@@ -80,6 +80,13 @@ export const Store = {
   },
 
   async deleteGroup(groupId) {
+    // Supprime aussi l'invitation associée pour ne pas laisser un code
+    // orphelin qui pointerait vers un groupe supprimé.
+    const snap = await getDoc(doc(db, 'groups', groupId));
+    const code = snap.exists() ? snap.data().joinCode : null;
+    if (code) {
+      await deleteDoc(doc(db, 'invites', code)).catch(() => {});
+    }
     return deleteDoc(doc(db, 'groups', groupId));
   },
 
@@ -133,15 +140,18 @@ export const Store = {
   },
 
   async votePoll(groupId, msg, index, uid) {
-    const votes = {};
+    // Update ciblé via FieldValue : on n'écrase plus toute la map pollVotes,
+    // impossible d'altérer ou d'effacer les votes des autres.
     const old = msg.pollVotes || {};
+    const update: Record<string, any> = {};
     Object.keys(old).forEach((k) => {
-      votes[k] = (old[k] || []).filter((u) => u !== uid);
+      update['pollVotes.' + k] = arrayRemove(uid);
     });
     const key = String(index);
     const already = (old[key] || []).includes(uid);
-    if (!already) votes[key] = [...(votes[key] || []), uid];
-    return updateDoc(doc(db, 'groups', groupId, 'messages', msg.id), { pollVotes: votes });
+    if (!already) update['pollVotes.' + key] = arrayUnion(uid);
+    else delete update['pollVotes.' + key];
+    return updateDoc(doc(db, 'groups', groupId, 'messages', msg.id), update);
   },
 
   async addEmoji(groupId, { name, image, user }) {
@@ -209,13 +219,13 @@ export const Store = {
   },
 
   async toggleReaction(groupId, message, emoji, uid) {
-    const reactions = { ...(message.reactions || {}) };
-    const users = new Set(reactions[emoji] || []);
-    if (users.has(uid)) users.delete(uid);
-    else users.add(uid);
-    if (users.size) reactions[emoji] = [...users];
-    else delete reactions[emoji];
-    return updateDoc(doc(db, 'groups', groupId, 'messages', message.id), { reactions });
+    // Update ciblé via FieldValue : on n'écrase plus toute la map reactions,
+    // impossible d'altérer ou d'effacer les réactions des autres.
+    const mine = ((message.reactions || {})[emoji] || []).includes(uid);
+    const field = 'reactions.' + emoji;
+    return updateDoc(doc(db, 'groups', groupId, 'messages', message.id), {
+      [field]: mine ? arrayRemove(uid) : arrayUnion(uid),
+    });
   },
 
   async setPinned(groupId, msgId, pinned) {
