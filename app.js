@@ -42,6 +42,22 @@ const composer = document.getElementById('composer');
 const messageInput = document.getElementById('message-input');
 const imageInput = document.getElementById('image-input');
 const attachBtn = document.getElementById('attach-btn');
+const micBtn = document.getElementById('mic-btn');
+const audioInput = document.getElementById('audio-input');
+const audioBar = document.getElementById('audio-bar');
+const audioStatus = document.getElementById('audio-status');
+const audioPreview = document.getElementById('audio-preview');
+const audioStop = document.getElementById('audio-stop');
+const audioCancel = document.getElementById('audio-cancel');
+const audioSend = document.getElementById('audio-send');
+
+let mediaRecorder = null;
+let audioChunks = [];
+let recTimer = null;
+let recSeconds = 0;
+let pendingAudio = null;
+const AUDIO_MAX_LEN = 900000;
+const REC_MAX_SECONDS = 30;
 const previewOverlay = document.getElementById('preview-overlay');
 const previewImg = document.getElementById('preview-img');
 const previewSize = document.getElementById('preview-size');
@@ -382,6 +398,8 @@ function renderTyping(list) {
 }
 
 function resetChat() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
+  resetAudioBar();
   if (unsubEmojis) { unsubEmojis(); unsubEmojis = null; }
   emojiMap = {};
   currentEmojis = [];
@@ -472,6 +490,15 @@ function buildBubble(msg) {
 
   if (msg.type === 'poll') {
     bubble.appendChild(buildPoll(msg));
+  }
+
+  if (msg.audio) {
+    const audio = document.createElement('audio');
+    audio.className = 'bubble-audio';
+    audio.controls = true;
+    audio.src = msg.audio;
+    audio.preload = 'none';
+    bubble.appendChild(audio);
   }
 
   if (msg.text) {
@@ -986,6 +1013,132 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   });
 }
+
+function blobToDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
+
+function resetAudioBar() {
+  audioBar.hidden = true;
+  audioPreview.hidden = true;
+  audioPreview.src = '';
+  audioSend.hidden = true;
+  audioCancel.hidden = true;
+  audioStop.hidden = true;
+  audioStatus.textContent = '';
+  pendingAudio = null;
+}
+
+async function startRecording() {
+  if (!currentGroupId || !currentUser) return;
+  if (!navigator.mediaDevices || !window.MediaRecorder) {
+    alert('Enregistrement non supporté par ce navigateur.');
+    return;
+  }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch {
+    alert('Accès au micro refusé.');
+    return;
+  }
+  audioChunks = [];
+  const mime = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+    ? 'audio/webm;codecs=opus'
+    : '';
+  mediaRecorder = mime
+    ? new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 24000 })
+    : new MediaRecorder(stream);
+  mediaRecorder.ondataavailable = (e) => { if (e.data.size) audioChunks.push(e.data); };
+  mediaRecorder.onstop = async () => {
+    stream.getTracks().forEach((t) => t.stop());
+    await finalizeRecording();
+  };
+  mediaRecorder.start();
+  recSeconds = 0;
+  audioBar.hidden = false;
+  audioPreview.hidden = true;
+  audioSend.hidden = true;
+  audioCancel.hidden = true;
+  audioStop.hidden = false;
+  micBtn.classList.add('recording');
+  audioStatus.textContent = 'Enregistrement… 0s';
+  recTimer = setInterval(() => {
+    recSeconds++;
+    audioStatus.textContent = `Enregistrement… ${recSeconds}s`;
+    if (recSeconds >= REC_MAX_SECONDS) stopRecording();
+  }, 1000);
+}
+
+function stopRecording() {
+  clearInterval(recTimer);
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+}
+
+async function finalizeRecording() {
+  clearInterval(recTimer);
+  micBtn.classList.remove('recording');
+  audioStop.hidden = true;
+  const blob = new Blob(audioChunks, { type: (audioChunks[0] && audioChunks[0].type) || 'audio/webm' });
+  const dataUrl = await blobToDataURL(blob);
+  if (dataUrl.length > AUDIO_MAX_LEN) {
+    alert('Enregistrement trop lourd. Essaie un vocal plus court.');
+    resetAudioBar();
+    return;
+  }
+  pendingAudio = dataUrl;
+  audioPreview.src = dataUrl;
+  audioPreview.hidden = false;
+  audioStatus.textContent = `Vocal ${recSeconds}s`;
+  audioSend.hidden = false;
+  audioCancel.hidden = false;
+}
+
+micBtn.addEventListener('click', () => {
+  if (mediaRecorder && mediaRecorder.state === 'recording') stopRecording();
+  else startRecording();
+});
+audioStop.addEventListener('click', stopRecording);
+audioCancel.addEventListener('click', resetAudioBar);
+audioSend.addEventListener('click', async () => {
+  if (!pendingAudio || !currentGroupId || !currentUser) return;
+  const audio = pendingAudio;
+  const text = messageInput.value.trim();
+  resetAudioBar();
+  try {
+    await Store.addMessage(currentGroupId, { text, audio, user: currentUser });
+    messageInput.value = '';
+  } catch (err) {
+    alert("Envoi impossible : " + err.message);
+  }
+});
+
+audioInput.addEventListener('change', async () => {
+  const file = audioInput.files && audioInput.files[0];
+  audioInput.value = '';
+  if (!file || !currentGroupId || !currentUser) return;
+  if (!file.type.startsWith('audio/')) return;
+  try {
+    const dataUrl = await blobToDataURL(file);
+    if (dataUrl.length > AUDIO_MAX_LEN) {
+      alert('Fichier audio trop lourd (max ~650 Ko). Choisis un fichier plus court.');
+      return;
+    }
+    await Store.addMessage(currentGroupId, {
+      text: messageInput.value.trim(),
+      audio: dataUrl,
+      user: currentUser,
+    });
+    messageInput.value = '';
+  } catch (err) {
+    alert("Envoi impossible : " + err.message);
+  }
+});
 
 function insertText(t) {
   const el = messageInput;

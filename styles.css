@@ -734,6 +734,30 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   color: var(--muted);
 }
 
+.audio-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.audio-status { font-size: 13px; color: var(--muted); }
+.audio-preview { height: 34px; max-width: 220px; }
+.audio-actions { display: flex; gap: 8px; margin-left: auto; }
+
+.bubble-audio { display: block; margin-top: 4px; max-width: 240px; height: 40px; }
+
+.attach.recording {
+  color: var(--danger);
+  border-color: var(--danger);
+  animation: pulse 1.2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .45; }
+}
+
 .composer {
   display: flex;
   gap: 10px;

@@ -83,10 +83,11 @@ export const Store = {
     return deleteDoc(doc(db, 'groups', groupId));
   },
 
-  async addMessage(groupId, { text = '', image = '', user }) {
+  async addMessage(groupId, { text = '', image = '', audio = '', user }) {
     return addDoc(collection(db, 'groups', groupId, 'messages'), {
       text: text.trim(),
       image,
+      audio,
       author: user.uid,
       authorName: user.displayName || 'Anonyme',
       authorPhoto: user.photoURL || '',
