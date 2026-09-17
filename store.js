@@ -21,12 +21,14 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   addDoc,
   setDoc,
   updateDoc,
   deleteDoc,
   onSnapshot,
   query,
+  where,
   serverTimestamp,
   arrayUnion,
   arrayRemove,
@@ -54,6 +56,13 @@ export const Store = {
   async getGroup(groupId) {
     const snap = await getDoc(doc(db, 'groups', groupId));
     return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  },
+
+  /** Chargement unique des groupes (secours si le temps réel est bloqué). */
+  async getMemberGroupsOnce(uid) {
+    const q = query(collection(db, 'groups'), where('memberUids', 'array-contains', uid));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
 
   watchMessages(groupId, callback, onError) {

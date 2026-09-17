@@ -38,7 +38,7 @@ export const auth = getAuth(app);
 // bloquent le canal streaming de Firestore (proxy, wifi filtré, extensions),
 // l'écoute temps réel restait bloquée sans réponse. Le long-polling règle ça.
 export const db = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true,
+  experimentalForceLongPolling: true,
 });
 
 const provider = new GoogleAuthProvider();

@@ -141,6 +141,23 @@ function startGroupsListeners() {
   stopGroupsListeners();
   diagGroups = 'groupes: écoute…';
   refreshDiag();
+
+  // Chargement immédiat de secours (au cas où le temps réel serait bloqué).
+  Store.getMemberGroupsOnce(currentUser.uid)
+    .then((list) => {
+      if (!memberGroups.length) {
+        memberGroups = list;
+        diagGroups = 'groupes: ' + list.length + ' (lecture)';
+        refreshDiag();
+        onGroupsChanged();
+      }
+    })
+    .catch((err) => {
+      console.error(err);
+      diagGroups = 'groupes: ERREUR ' + err.code;
+      refreshDiag();
+    });
+
   unsubMember = Store.watchMemberGroups(
     currentUser.uid,
     (list) => {
