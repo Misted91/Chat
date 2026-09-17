@@ -1,13 +1,3 @@
-/*
- * Initialisation de Firebase (app, authentification Google, Firestore).
- * -------------------------------------------------------------
- * La configuration ci-dessous est publique par nature (côté client) :
- * la sécurité réelle se règle dans les « Règles » Firestore, pas ici.
- *
- * À activer dans la console Firebase (https://console.firebase.google.com) :
- *   - Authentication → Sign-in method → Google
- *   - Firestore Database → Créer une base
- */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
   getAuth,
@@ -34,33 +24,18 @@ const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 
-// Détection automatique du long-polling : sur les réseaux/navigateurs qui
-// bloquent le canal streaming de Firestore (proxy, wifi filtré, extensions),
-// l'écoute temps réel restait bloquée sans réponse. Le long-polling règle ça.
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
 });
 
 const provider = new GoogleAuthProvider();
 
-// Connexion par popup. C'est la méthode fiable quand le site est hébergé
-// sur un domaine différent de authDomain (ex. GitHub Pages) : le popup
-// renvoie la connexion via postMessage.
-//
-// Les avertissements « Cross-Origin-Opener-Policy … window.closed » dans
-// la console sont inoffensifs : Firebase surveille la fermeture du popup,
-// le navigateur le signale, mais la connexion aboutit quand même.
-//
-// (La connexion par redirection est volontairement écartée : elle échoue
-// silencieusement en cross-domaine à cause du cloisonnement du stockage.)
 export async function loginWithGoogle() {
-  // Garde la session connectée d'un chargement de page à l'autre.
+
   await setPersistence(auth, browserLocalPersistence);
   return signInWithPopup(auth, provider);
 }
 
-// À appeler au démarrage : récupère le résultat d'une connexion par redirection
-// et remonte une éventuelle erreur (ex. fournisseur Google non activé).
 export function handleRedirectResult() {
   return getRedirectResult(auth);
 }

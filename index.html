@@ -4,16 +4,15 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Groupes de discussion</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>C</text></svg>" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- Écran de connexion Google -->
   <div class="login-overlay" id="login-overlay">
     <div class="login-card">
       <h1>Groupes de discussion</h1>
       <p>Connecte-toi pour créer des groupes et discuter.</p>
-      <button class="google-btn" id="login-btn">
+      <button class="google-btn" id="login-btn" type="button">
         <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
           <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
           <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
@@ -26,65 +25,78 @@
   </div>
 
   <div class="app">
-    <!-- Barre latérale : liste des groupes -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <header class="sidebar__head">
         <h1>Groupes</h1>
         <div class="user" id="user-zone">
           <img class="user__avatar" id="user-avatar" alt="" hidden />
           <span class="user__name" id="user-name"></span>
-          <button class="logout" id="logout-btn" hidden>Déconnexion</button>
+          <button class="logout" id="logout-btn" type="button" hidden>Déconnexion</button>
         </div>
       </header>
 
       <form class="new-group" id="new-group-form">
+        <label class="sr-only" for="new-group-input">Nom du nouveau groupe</label>
         <input
           type="text"
           id="new-group-input"
+          name="new-group-input"
           placeholder="Nom du nouveau groupe…"
           autocomplete="off"
           maxlength="40"
         />
-        <button type="submit" aria-label="Créer le groupe">+</button>
+        <button type="submit" aria-label="Créer le groupe">
+          <i data-lucide="plus" aria-hidden="true"></i>
+        </button>
       </form>
 
       <form class="join-code" id="join-code-form">
+        <label class="sr-only" for="join-code-input">Rejoindre avec un code</label>
         <input
           type="text"
           id="join-code-input"
+          name="join-code-input"
           placeholder="Rejoindre avec un code…"
           autocomplete="off"
           maxlength="10"
         />
-        <button type="submit" aria-label="Rejoindre">→</button>
+        <button type="submit" aria-label="Rejoindre le groupe">
+          <i data-lucide="arrow-right" aria-hidden="true"></i>
+        </button>
       </form>
 
       <ul class="group-list" id="group-list"></ul>
     </aside>
 
-    <!-- Zone de conversation -->
     <main class="chat">
       <header class="chat__head" id="chat-head">
+        <button class="icon-btn sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Afficher ou masquer la liste des groupes">
+          <i data-lucide="panel-left" aria-hidden="true"></i>
+        </button>
         <h2 id="chat-title">Sélectionne un groupe</h2>
         <div class="chat__actions">
-          <button class="btn-ghost" id="admin-btn" hidden>⚙️ Admin</button>
-          <button class="btn-danger" id="delete-group" hidden>Supprimer</button>
+          <button class="btn-ghost" id="admin-btn" type="button" hidden aria-label="Paramètres du groupe">
+            <i data-lucide="settings" aria-hidden="true"></i>
+            <span>Admin</span>
+          </button>
+          <button class="btn-danger" id="delete-group" type="button" hidden>Supprimer</button>
         </div>
       </header>
 
-      <!-- Barre des messages épinglés -->
       <div class="pinned-bar" id="pinned-bar" hidden></div>
 
       <div class="messages" id="messages"></div>
 
       <form class="composer" id="composer" hidden>
-        <label class="attach" id="attach-btn" title="Envoyer une image">
-          📷
-          <input type="file" id="image-input" accept="image/*" hidden />
+        <label class="attach" id="attach-btn" for="image-input" title="Envoyer une image" aria-label="Envoyer une image">
+          <i data-lucide="image" aria-hidden="true"></i>
         </label>
+        <input type="file" id="image-input" name="image-input" accept="image/*" hidden />
+        <label class="sr-only" for="message-input">Écris un message</label>
         <input
           type="text"
           id="message-input"
+          name="message-input"
           placeholder="Écris un message…"
           autocomplete="off"
         />
@@ -93,15 +105,15 @@
     </main>
   </div>
 
-  <!-- Modale du panneau admin -->
   <div class="modal-overlay" id="admin-overlay" hidden>
     <div class="modal">
       <header class="modal__head">
         <h3>Paramètres du groupe</h3>
-        <button class="modal__close" id="admin-close" aria-label="Fermer">✕</button>
+        <button class="modal__close" id="admin-close" type="button" aria-label="Fermer">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
       </header>
 
-      <!-- Code d'invitation -->
       <div class="settings-block">
         <span class="settings-label">Code d'invitation</span>
         <div class="invite-row">
@@ -118,12 +130,13 @@
     </div>
   </div>
 
-  <!-- Prévisualisation d'image avant envoi -->
   <div class="modal-overlay" id="preview-overlay" hidden>
     <div class="modal preview-modal">
       <header class="modal__head">
         <h3>Envoyer l'image</h3>
-        <button class="modal__close" id="preview-close" aria-label="Fermer">✕</button>
+        <button class="modal__close" id="preview-close" type="button" aria-label="Fermer">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
       </header>
       <img class="preview-img" id="preview-img" alt="Aperçu" />
       <p class="settings-hint" id="preview-size"></p>
@@ -134,11 +147,11 @@
     </div>
   </div>
 
-  <!-- Visionneuse plein écran -->
   <div class="lightbox" id="lightbox" hidden>
     <img class="lightbox-img" id="lightbox-img" alt="Image" />
   </div>
 
+  <script src="https://unpkg.com/lucide@latest"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

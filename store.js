@@ -1,21 +1,3 @@
-/*
- * Couche de données — Firestore.
- * -------------------------------------------------------------
- * Modèle de données :
- *   groups (collection)
- *     └─ {groupId} : {
- *          name, createdAt, createdBy, createdByName,
- *          visibility: 'public' | 'private',
- *          memberUids: [uid...],   // qui a accès (public: tout le monde s'ajoute en ouvrant)
- *          bannedUids: [uid...],
- *          joinCode: 'ABC123'
- *        }
- *          ├─ messages/{msgId} : { author, authorName, text, ts, reactions{}, pinned }
- *          └─ members/{uid}    : { uid, name, joinedAt }
- *
- *   invites (collection)
- *     └─ {code} : { groupId, createdBy }   // permet de rejoindre un groupe privé par code
- */
 import { db } from './firebase.js';
 import {
   collection,
@@ -42,7 +24,7 @@ function makeCode(len = 6) {
 }
 
 export const Store = {
-  /** Groupes dont l'utilisateur est membre (créés ou rejoints par code). */
+
   watchMemberGroups(uid, callback, onError) {
     const q = query(collection(db, 'groups'), where('memberUids', 'array-contains', uid));
     return onSnapshot(
@@ -52,13 +34,11 @@ export const Store = {
     );
   },
 
-  /** Récupère un groupe une seule fois (pour l'ouvrir dès qu'on l'a rejoint). */
   async getGroup(groupId) {
     const snap = await getDoc(doc(db, 'groups', groupId));
     return snap.exists() ? { id: snap.id, ...snap.data() } : null;
   },
 
-  /** Chargement unique des groupes (secours si le temps réel est bloqué). */
   async getMemberGroupsOnce(uid) {
     const q = query(collection(db, 'groups'), where('memberUids', 'array-contains', uid));
     const snap = await getDocs(q);
@@ -94,7 +74,7 @@ export const Store = {
       bannedUids: [],
       joinCode: code,
     });
-    // Enregistre le code d'invitation.
+
     await setDoc(doc(db, 'invites', code), { groupId: ref.id, createdBy: user.uid });
     return ref;
   },
@@ -106,7 +86,7 @@ export const Store = {
   async addMessage(groupId, { text = '', image = '', user }) {
     return addDoc(collection(db, 'groups', groupId, 'messages'), {
       text: text.trim(),
-      image, // image compressée en data URL (vide si aucune)
+      image,
       author: user.uid,
       authorName: user.displayName || 'Anonyme',
       ts: serverTimestamp(),
@@ -115,7 +95,6 @@ export const Store = {
     });
   },
 
-  /** Marque sa présence dans le groupe (membre + fiche). */
   async joinGroup(groupId, user) {
     await updateDoc(doc(db, 'groups', groupId), {
       memberUids: arrayUnion(user.uid),
@@ -131,7 +110,6 @@ export const Store = {
     );
   },
 
-  /** Rejoint un groupe via un code d'invitation. Renvoie le groupId. */
   async joinByCode(code, user) {
     const inviteSnap = await getDoc(doc(db, 'invites', code.trim().toUpperCase()));
     if (!inviteSnap.exists()) return null;
@@ -157,7 +135,7 @@ export const Store = {
   async setBanned(groupId, uid, banned) {
     return updateDoc(doc(db, 'groups', groupId), {
       bannedUids: banned ? arrayUnion(uid) : arrayRemove(uid),
-      // Un banni est aussi retiré des membres.
+
       memberUids: banned ? arrayRemove(uid) : arrayUnion(uid),
     });
   },
