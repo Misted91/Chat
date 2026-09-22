@@ -679,7 +679,9 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   left: 0;
   margin-bottom: 4px;
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
+  max-width: 220px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -696,6 +698,7 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   border-radius: 6px;
 }
 .emoji-picker button:hover { background: var(--panel-2); }
+.emoji-picker button:nth-child(5) { margin-right: 14px; }
 
 /* ---------- Modale admin ---------- */
 .modal-overlay {
@@ -1363,7 +1366,40 @@ select.modal-input { cursor: pointer; }
   background: var(--panel-2);
 }
 
+.cmd-pop { max-height: 240px; }
+.cmd-item {
+  display: grid;
+  grid-template-columns: 18px auto 1fr;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.cmd-item:hover { background: var(--panel-2); }
+.cmd-item [data-lucide] { width: 16px; height: 16px; color: var(--muted); }
+.cmd-item__name { font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--accent); }
+.cmd-item__desc { color: var(--muted); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.composer--blocked textarea,
+.composer--blocked .send-btn,
+.composer--blocked .plus-btn,
+.composer button:disabled,
+.composer textarea:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 @media (max-width: 720px) {
   .app { grid-template-columns: 1fr; }
   .sidebar { max-height: 42vh; }
+  .cmd-item { grid-template-columns: 18px 1fr; }
+  .cmd-item__desc { display: none; }
 }

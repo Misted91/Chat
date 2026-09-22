@@ -151,6 +151,15 @@ const replyBarName = document.getElementById('reply-bar-name');
 const replyBarText = document.getElementById('reply-bar-text');
 const replyCancel = document.getElementById('reply-cancel');
 const mentionPop = document.getElementById('mention-pop');
+const cmdPop = document.getElementById('cmd-pop');
+const SLASH_COMMANDS = [
+  { label: '/group rename', insert: '/group rename ', icon: 'pencil', desc: 'Renommer le groupe (admin)' },
+  { label: '/group visibility', insert: '/group visibility ', icon: 'globe', desc: 'Public ou privé (admin)' },
+  { label: '/group mod', insert: '/group mod @', icon: 'shield', desc: 'Nommer / retirer un admin (propriétaire)' },
+  { label: '/group ban', insert: '/group ban @', icon: 'user-x', desc: 'Bannir un membre (admin)' },
+  { label: '/group timeout', insert: '/group timeout @', icon: 'mic-off', desc: 'Rendre muet / réactiver (admin)' },
+  { label: '/group clear', insert: '/group clear ', icon: 'trash-2', desc: 'Supprimer des messages (admin)' },
+];
 const groupNotifToggle = document.getElementById('group-notif-toggle');
 const moderationBlock = document.getElementById('moderation-block');
 const lockToggle = document.getElementById('lock-toggle');
@@ -177,7 +186,7 @@ const timeFormat = document.getElementById('time-format');
 const timePreview = document.getElementById('time-preview');
 
 let replyingTo = null;
-let notifGlobal = localStorage.getItem('notifGlobal') || 'all';
+let notifGlobal = localStorage.getItem('notifGlobal') || 'none';
 let restoreScrollFor = null;
 let restored = false;
 let lastSentAt = 0;
@@ -238,6 +247,9 @@ function updateComposerState() {
   const blocked = muted || locked;
   messageInput.disabled = blocked;
   plusBtn.disabled = blocked;
+  const sendBtn = composer.querySelector('.send-btn');
+  if (sendBtn) sendBtn.disabled = blocked;
+  composer.classList.toggle('composer--blocked', blocked);
   slowHint.hidden = true;
   if (muted) {
     messageInput.placeholder = 'Tu es muet dans ce groupe.';
@@ -1267,18 +1279,35 @@ function renderAdminPanel() {
   renderMembers(group);
 }
 
-function changeVisibility(v) {
-  if (!currentGroupId) return;
-  Store.setVisibility(currentGroupId, v).catch((err) => toast('Modification impossible : ' + err.message));
+async function changeVisibility(v) {
+  const group = currentGroup();
+  if (!currentGroupId || !group) return;
+  if ((group.visibility || 'private') === v) return;
+  try {
+    await Store.setVisibility(currentGroupId, v);
+    await Store.addSystemMessage(
+      currentGroupId,
+      `${currentUser.displayName || 'Un admin'} a rendu le groupe ${v === 'public' ? 'public' : 'privé'}`,
+      currentUser
+    );
+  } catch (err) {
+    toast('Modification impossible : ' + err.message);
+  }
 }
 visPublicBtn.addEventListener('click', () => changeVisibility('public'));
 visPrivateBtn.addEventListener('click', () => changeVisibility('private'));
 
 renameSave.addEventListener('click', async () => {
   const name = renameInput.value.trim();
-  if (!name || !currentGroupId) return;
+  const group = currentGroup();
+  if (!name || !currentGroupId || !group || name === group.name) return;
   try {
     await Store.renameGroup(currentGroupId, name);
+    await Store.addSystemMessage(
+      currentGroupId,
+      `${currentUser.displayName || 'Un admin'} a renommé le groupe en « ${name.slice(0, 40)} »`,
+      currentUser
+    );
     toast('Groupe renommé.');
   } catch (err) {
     toast('Renommage impossible : ' + err.message);
@@ -1701,6 +1730,7 @@ lightbox.addEventListener('click', () => {
 
 composer.addEventListener('submit', async (e) => {
   e.preventDefault();
+  cmdPop.hidden = true;
   const text = messageInput.value.trim();
   if (!text || !currentGroupId || !currentUser) return;
   const group = currentGroup();
@@ -1791,6 +1821,7 @@ async function handleCommand(text) {
       if (!needAdmin()) return true;
       if (!arg) { toast('Usage : /group rename <nom>'); return true; }
       await Store.renameGroup(currentGroupId, arg.slice(0, 40));
+      await Store.addSystemMessage(currentGroupId, `${currentUser.displayName || 'Un admin'} a renommé le groupe en « ${arg.slice(0, 40)} »`, currentUser);
       toast('Groupe renommé.');
       return true;
     }
@@ -1800,6 +1831,7 @@ async function handleCommand(text) {
       const v = arg.toLowerCase();
       if (v !== 'public' && v !== 'private') { toast('Usage : /group visibility <public|private>'); return true; }
       await Store.setVisibility(currentGroupId, v);
+      await Store.addSystemMessage(currentGroupId, `${currentUser.displayName || 'Un admin'} a rendu le groupe ${v === 'public' ? 'public' : 'privé'}`, currentUser);
       toast('Visibilité : ' + v + '.');
       return true;
     }
@@ -1950,6 +1982,41 @@ messageInput.addEventListener('input', () => {
     mentionPop.appendChild(b);
   });
   mentionPop.hidden = false;
+});
+
+function renderCmdPop(items) {
+  cmdPop.innerHTML = '';
+  items.forEach((c) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'cmd-item';
+    b.innerHTML =
+      `<i data-lucide="${c.icon}" aria-hidden="true"></i>` +
+      `<span class="cmd-item__name">${c.label}</span>` +
+      `<span class="cmd-item__desc">${c.desc}</span>`;
+    b.addEventListener('click', () => {
+      messageInput.value = c.insert;
+      cmdPop.hidden = true;
+      messageInput.focus();
+      messageInput.setSelectionRange(c.insert.length, c.insert.length);
+      autoGrow();
+    });
+    cmdPop.appendChild(b);
+  });
+  cmdPop.hidden = items.length === 0;
+  refreshIcons();
+}
+
+messageInput.addEventListener('input', () => {
+  const val = messageInput.value;
+  const m = val.match(/^\/([a-zA-Z]*)$/);
+  if (!m) { cmdPop.hidden = true; return; }
+  mentionPop.hidden = true;
+  const q = ('/' + m[1]).toLowerCase();
+  renderCmdPop(SLASH_COMMANDS.filter((c) => c.label.toLowerCase().startsWith(q) || ('/group').startsWith(q)));
+});
+document.addEventListener('click', (e) => {
+  if (!cmdPop.hidden && !e.target.closest('#cmd-pop') && e.target !== messageInput) cmdPop.hidden = true;
 });
 
 function stopTyping() {
