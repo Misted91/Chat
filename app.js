@@ -131,6 +131,7 @@ let pendingImages = [];
 const adminOverlay = document.getElementById('admin-overlay');
 const adminClose = document.getElementById('admin-close');
 const memberList = document.getElementById('member-list');
+const inviteBlock = document.getElementById('invite-block');
 const inviteCodeEl = document.getElementById('invite-code');
 const copyInviteBtn = document.getElementById('copy-invite');
 const renameBlock = document.getElementById('rename-block');
@@ -1260,8 +1261,10 @@ function renderAdminPanel() {
   renameBlock.hidden = !iAmAdmin;
   if (iAmAdmin) renameInput.value = group.name || '';
 
-  visibilityBlock.hidden = !iAmAdmin;
   const vis = group.visibility === 'public' ? 'public' : 'private';
+  inviteBlock.hidden = vis === 'public';
+
+  visibilityBlock.hidden = !iAmAdmin;
   visPublicBtn.classList.toggle('active', vis === 'public');
   visPrivateBtn.classList.toggle('active', vis === 'private');
   visibilityHint.textContent =
