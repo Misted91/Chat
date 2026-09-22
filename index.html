@@ -51,35 +51,14 @@
         </div>
       </header>
 
-      <form class="new-group" id="new-group-form">
-        <label class="sr-only" for="new-group-input">Nom du nouveau groupe</label>
-        <input
-          type="text"
-          id="new-group-input"
-          name="new-group-input"
-          placeholder="Nom du nouveau groupe…"
-          autocomplete="off"
-          maxlength="40"
-        />
-        <button type="submit" aria-label="Créer le groupe">
-          <i data-lucide="plus" aria-hidden="true"></i>
+      <div class="sidebar-actions">
+        <button class="side-btn side-btn--primary" id="open-create-group" type="button">
+          <i data-lucide="plus" aria-hidden="true"></i><span>Créer un groupe</span>
         </button>
-      </form>
-
-      <form class="join-code" id="join-code-form">
-        <label class="sr-only" for="join-code-input">Rejoindre avec un code</label>
-        <input
-          type="text"
-          id="join-code-input"
-          name="join-code-input"
-          placeholder="Rejoindre avec un code…"
-          autocomplete="off"
-          maxlength="10"
-        />
-        <button type="submit" aria-label="Rejoindre le groupe">
-          <i data-lucide="arrow-right" aria-hidden="true"></i>
+        <button class="side-btn" id="open-join-group" type="button">
+          <i data-lucide="log-in" aria-hidden="true"></i><span>Rejoindre un groupe</span>
         </button>
-      </form>
+      </div>
 
       <ul class="group-list" id="group-list"></ul>
     </aside>
@@ -89,7 +68,10 @@
         <button class="icon-btn sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Afficher ou masquer la liste des groupes">
           <i data-lucide="panel-left" aria-hidden="true"></i>
         </button>
-        <h2 id="chat-title">Sélectionne un groupe</h2>
+        <button class="chat-title-btn" id="chat-title-btn" type="button">
+          <h2 id="chat-title">Sélectionne un groupe</h2>
+          <i data-lucide="pencil" aria-hidden="true" class="chat-title-edit" id="chat-title-edit" hidden></i>
+        </button>
         <div class="chat__actions">
           <button class="btn-ghost" id="admin-btn" type="button" hidden aria-label="Membres et paramètres">
             <i data-lucide="users" aria-hidden="true"></i>
@@ -101,13 +83,15 @@
 
       <div class="pinned-bar" id="pinned-bar" hidden></div>
 
-      <div class="messages" id="messages"></div>
+      <div class="messages-wrap">
+        <div class="messages" id="messages"></div>
 
-      <button class="scroll-down" id="scroll-down" type="button" hidden aria-label="Descendre en bas de la conversation">
-        <i data-lucide="arrow-down" aria-hidden="true"></i>
-      </button>
+        <div class="typing" id="typing" hidden></div>
 
-      <div class="typing" id="typing" hidden></div>
+        <button class="scroll-down" id="scroll-down" type="button" hidden aria-label="Descendre en bas de la conversation">
+          <i data-lucide="arrow-down" aria-hidden="true"></i>
+        </button>
+      </div>
 
       <div class="reply-bar" id="reply-bar" hidden>
         <i data-lucide="reply" aria-hidden="true"></i>
@@ -121,6 +105,8 @@
       </div>
 
       <div class="mention-pop" id="mention-pop" hidden></div>
+
+      <div class="slow-hint" id="slow-hint" hidden></div>
 
       <form class="composer" id="composer" hidden>
         <input type="file" id="image-input" name="image-input" accept="image/*,.gif,.heic,.heif" multiple hidden />
@@ -143,12 +129,6 @@
             </button>
           </div>
         </div>
-        <div class="emoji-wrap">
-          <button class="attach" id="emoji-btn" type="button" title="Emojis" aria-label="Emojis">
-            <i data-lucide="smile" aria-hidden="true"></i>
-          </button>
-          <div class="emoji-pop" id="emoji-pop" hidden></div>
-        </div>
         <label class="sr-only" for="message-input">Écris un message</label>
         <textarea
           id="message-input"
@@ -162,6 +142,60 @@
         </button>
       </form>
     </main>
+  </div>
+
+  <div class="modal-overlay" id="create-overlay" hidden>
+    <div class="modal">
+      <header class="modal__head">
+        <h3>Créer un groupe</h3>
+        <button class="modal__close" id="create-close" type="button" aria-label="Fermer">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
+      </header>
+      <form id="create-form">
+        <div class="settings-block">
+          <label class="settings-label" for="create-name">Nom du groupe</label>
+          <input class="modal-input" type="text" id="create-name" name="create-name" placeholder="Nom du groupe…" autocomplete="off" maxlength="40" />
+        </div>
+        <div class="settings-block">
+          <span class="settings-label">Visibilité</span>
+          <div class="toggle" id="create-visibility">
+            <button type="button" data-value="private" class="active">
+              <i data-lucide="lock" aria-hidden="true"></i><span>Privé</span>
+            </button>
+            <button type="button" data-value="public">
+              <i data-lucide="globe" aria-hidden="true"></i><span>Public</span>
+            </button>
+          </div>
+        </div>
+        <div class="preview-actions">
+          <button type="button" class="btn-ghost" id="create-cancel">Annuler</button>
+          <button type="submit" class="preview-send">Créer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="join-overlay" hidden>
+    <div class="modal">
+      <header class="modal__head">
+        <h3>Rejoindre un groupe</h3>
+        <button class="modal__close" id="join-close" type="button" aria-label="Fermer">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
+      </header>
+      <form id="join-form">
+        <div class="settings-block">
+          <label class="settings-label" for="join-input">Code d'invitation</label>
+          <input class="modal-input code-field" type="text" id="join-input" name="join-input" placeholder="XX-XXX-XX" autocomplete="off" maxlength="12" />
+          <p class="settings-hint">Colle un code ou un lien d'invitation.</p>
+        </div>
+        <div class="preview-actions">
+          <button type="button" class="btn-ghost" id="join-cancel">Annuler</button>
+          <button type="submit" class="preview-send">Rejoindre</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <div class="modal-overlay" id="admin-overlay" hidden>
@@ -194,26 +228,105 @@
         </div>
       </div>
 
+      <div class="settings-block" id="moderation-block" hidden>
+        <span class="settings-label">Modération</span>
+        <label class="settings-check" for="lock-toggle">
+          <input type="checkbox" id="lock-toggle" name="lock-toggle" />
+          <span>Bloquer le chat (seuls les admins peuvent écrire)</span>
+        </label>
+        <div class="slow-row">
+          <label class="slow-label" for="slow-range">Mode lent</label>
+          <input type="range" id="slow-range" name="slow-range" min="0" max="60" step="5" value="0" />
+          <span class="slow-value" id="slow-value">Désactivé</span>
+        </div>
+      </div>
+
       <div class="settings-block">
         <span class="settings-label">Code d'invitation</span>
         <div class="invite-row">
           <code class="invite-code" id="invite-code">------</code>
           <button type="button" class="btn-ghost" id="copy-invite">Copier</button>
         </div>
-        <p class="settings-hint">Partage ce code pour laisser quelqu'un rejoindre le groupe.</p>
+        <div class="invite-row">
+          <button type="button" class="btn-ghost share-link-btn" id="share-link">
+            <i data-lucide="share-2" aria-hidden="true"></i><span>Copier le lien d'invitation</span>
+          </button>
+        </div>
+        <p class="settings-hint">Partage ce code ou ce lien pour laisser quelqu'un rejoindre le groupe.</p>
       </div>
 
       <div class="settings-block">
-        <label class="settings-check" for="group-notif">
-          <input type="checkbox" id="group-notif" name="group-notif" />
-          <span>Notifications pour ce groupe</span>
-        </label>
+        <span class="settings-label">Notifications de ce groupe</span>
+        <div class="toggle toggle--three" id="group-notif-toggle">
+          <button type="button" data-v="all">Toutes</button>
+          <button type="button" data-v="mentions">Mentions</button>
+          <button type="button" data-v="none">Aucune</button>
+        </div>
       </div>
 
       <div class="settings-block">
         <span class="settings-label">Membres</span>
         <ul class="member-list" id="member-list"></ul>
       </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="url-overlay" hidden>
+    <div class="modal">
+      <header class="modal__head">
+        <h3>Média par URL</h3>
+        <button class="modal__close" id="url-close" type="button" aria-label="Fermer">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
+      </header>
+      <form id="url-form">
+        <div class="settings-block">
+          <label class="settings-label" for="url-input">URL de l'image ou du GIF (https)</label>
+          <input class="modal-input" type="url" id="url-input" name="url-input" placeholder="https://…" autocomplete="off" />
+        </div>
+        <div class="preview-actions">
+          <button type="button" class="btn-ghost" id="url-cancel">Annuler</button>
+          <button type="submit" class="preview-send">Envoyer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="time-overlay" hidden>
+    <div class="modal">
+      <header class="modal__head">
+        <h3>Horodatage</h3>
+        <button class="modal__close" id="time-close" type="button" aria-label="Fermer">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
+      </header>
+      <form id="time-form">
+        <div class="settings-block">
+          <label class="settings-label" for="time-date">Date</label>
+          <input class="modal-input" type="date" id="time-date" name="time-date" />
+        </div>
+        <div class="settings-block">
+          <label class="settings-label" for="time-time">Heure</label>
+          <input class="modal-input" type="time" id="time-time" name="time-time" />
+        </div>
+        <div class="settings-block">
+          <label class="settings-label" for="time-format">Format</label>
+          <select class="modal-input" id="time-format" name="time-format">
+            <option value="R">Relatif (il y a 2 h)</option>
+            <option value="t">Heure courte (14:30)</option>
+            <option value="T">Heure longue (14:30:00)</option>
+            <option value="d">Date courte (22/09/2026)</option>
+            <option value="D">Date longue (22 septembre 2026)</option>
+            <option value="f">Date et heure (22 sept. 2026 14:30)</option>
+            <option value="F">Complet (lundi 22 septembre 2026 14:30)</option>
+          </select>
+        </div>
+        <p class="settings-hint" id="time-preview"></p>
+        <div class="preview-actions">
+          <button type="button" class="btn-ghost" id="time-cancel">Annuler</button>
+          <button type="submit" class="preview-send">Insérer</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -238,6 +351,9 @@
   <div class="lightbox" id="lightbox" hidden>
     <img class="lightbox-img" id="lightbox-img" alt="Image" />
   </div>
+
+  <div class="msg-menu floating" id="floating-menu" hidden></div>
+  <div class="emoji-picker floating" id="floating-picker" hidden></div>
 
   <div class="modal-overlay" id="poll-overlay" hidden>
     <div class="modal">

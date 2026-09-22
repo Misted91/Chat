@@ -73,7 +73,16 @@ service cloud.firestore {
         let g = parent();
         return ('visibility' in g) && g.visibility == 'public';
       }
+      function pMuted() {
+        let g = parent();
+        return ('mutedUids' in g) && g.mutedUids.hasAny([request.auth.uid]);
+      }
+      function pLocked() {
+        let g = parent();
+        return ('locked' in g) && g.locked == true;
+      }
       function pView() { return isSignedIn() && !pBanned() && (pMember() || pAdmin() || pPublic()); }
+      function pCanPost() { return pView() && !pMuted() && (!pLocked() || pAdmin()); }
 
       match /members/{uid} {
         allow read: if pView();
@@ -115,7 +124,7 @@ service cloud.firestore {
 
       match /messages/{messageId} {
         allow read: if pView();
-        allow create: if pView() && validMessage();
+        allow create: if pCanPost() && validMessage();
         allow update: if pView() && (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
           || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pollVotes'])

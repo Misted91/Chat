@@ -17,7 +17,7 @@ import {
   arrayRemove,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
-function makeCode(len = 16) {
+function makeCode(len = 7) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let out = '';
   for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
@@ -77,17 +77,20 @@ export const Store = {
     );
   },
 
-  async addGroup(name, user) {
+  async addGroup(name, user, visibility = 'private') {
     const code = makeCode();
     const ref = await addDoc(collection(db, 'groups'), {
       name: name.trim(),
       createdAt: serverTimestamp(),
       createdBy: user.uid,
       createdByName: user.displayName || 'Anonyme',
-      visibility: 'private',
+      visibility: visibility === 'public' ? 'public' : 'private',
       memberUids: [user.uid],
       adminUids: [],
       bannedUids: [],
+      mutedUids: [],
+      locked: false,
+      slowMode: 0,
       joinCode: code,
     });
 
@@ -235,7 +238,8 @@ export const Store = {
   },
 
   async joinByCode(code, user) {
-    const inviteSnap = await getDoc(doc(db, 'invites', code.trim().toUpperCase()));
+    const clean = code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    const inviteSnap = await getDoc(doc(db, 'invites', clean));
     if (!inviteSnap.exists()) return null;
     const { groupId } = inviteSnap.data();
     await this.joinGroup(groupId, user);
@@ -264,5 +268,34 @@ export const Store = {
 
       memberUids: banned ? arrayRemove(uid) : arrayUnion(uid),
     });
+  },
+
+  async setMuted(groupId, uid, muted) {
+    return updateDoc(doc(db, 'groups', groupId), {
+      mutedUids: muted ? arrayUnion(uid) : arrayRemove(uid),
+    });
+  },
+
+  async setLocked(groupId, locked) {
+    return updateDoc(doc(db, 'groups', groupId), { locked: !!locked });
+  },
+
+  async setSlowMode(groupId, seconds) {
+    return updateDoc(doc(db, 'groups', groupId), { slowMode: Math.max(0, Math.min(60, seconds | 0)) });
+  },
+
+  async clearMessages(groupId, count) {
+    const snap = await getDocs(collection(db, 'groups', groupId, 'messages'));
+    let docs = snap.docs.map((d) => ({ ref: d.ref, ts: d.data().ts }));
+    docs.sort((a, b) => (b.ts?.toMillis?.() || 0) - (a.ts?.toMillis?.() || 0));
+    if (count !== 'all') docs = docs.slice(0, Math.max(0, count | 0));
+    let batch = writeBatch(db);
+    let n = 0;
+    for (const d of docs) {
+      batch.delete(d.ref);
+      if (++n >= 450) { await batch.commit(); batch = writeBatch(db); n = 0; }
+    }
+    if (n) await batch.commit();
+    return docs.length;
   },
 };

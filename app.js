@@ -7,11 +7,60 @@ import {
 } from './firebase.js';
 
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
-const PICKER_EMOJIS = [
-  '😀', '😁', '😂', '🤣', '😊', '😍', '😘', '😎', '🤔', '😴',
-  '😭', '😡', '👍', '👎', '👏', '🙏', '💪', '🔥', '🎉', '❤️',
-  '💔', '✨', '⭐', '✅', '❌', '⚡', '🚀', '🍕', '☕', '🎮',
+
+const PROFANITY = [
+  'connard', 'connasse', 'salope', 'salaud', 'enculé', 'encule', 'enculer',
+  'putain', 'pute', 'merde', 'batard', 'bâtard', 'nique', 'niquer', 'ntm',
+  'fdp', 'pd', 'pédé', 'pede', 'tapette', 'bougnoule', 'négro', 'negro',
+  'fuck', 'shit', 'bitch', 'asshole', 'cunt', 'nigger', 'faggot', 'retard',
 ];
+
+function normalizeForFilter(s) {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[0@]/g, 'o')
+    .replace(/[1!|]/g, 'i')
+    .replace(/[3]/g, 'e')
+    .replace(/[4]/g, 'a')
+    .replace(/[5$]/g, 's')
+    .replace(/[7]/g, 't');
+}
+
+function findProfanity(text) {
+  const norm = normalizeForFilter(text);
+  return PROFANITY.find((word) => {
+    const w = normalizeForFilter(word);
+    const re = new RegExp('(^|[^a-z])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z]|$)');
+    return re.test(norm);
+  });
+}
+
+const FRENCH_HINTS = [
+  'le', 'la', 'les', 'un', 'une', 'des', 'de', 'du', 'et', 'est', 'je',
+  'tu', 'il', 'elle', 'nous', 'vous', 'ils', 'pas', 'que', 'qui', 'pour',
+  'avec', 'mais', 'ça', 'ce', 'cette', 'bonjour', 'salut', 'merci', 'oui',
+  'non', 'sur', 'dans', 'plus', 'moi', 'toi', 'être', 'avoir', 'faire',
+];
+function looksFrench(text) {
+  const words = text.toLowerCase().match(/[a-zà-ÿ]+/g);
+  if (!words || words.length < 2) return false;
+  let hits = 0;
+  words.forEach((w) => { if (FRENCH_HINTS.includes(w)) hits++; });
+  return hits >= 1 && hits / words.length > 0.12;
+}
+
+function formatInviteCode(code) {
+  const c = (code || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  if (c.length === 7) return `${c.slice(0, 2)}-${c.slice(2, 5)}-${c.slice(5)}`;
+  return c || '------';
+}
+
+function inviteLink(code) {
+  const c = (code || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  return `${location.origin}${location.pathname}?join=${c}`;
+}
 
 let currentUser = null;
 let currentGroupId = null;
@@ -35,12 +84,24 @@ const userAvatar = document.getElementById('user-avatar');
 const sidebar = document.getElementById('sidebar');
 const sidebarToggle = document.getElementById('sidebar-toggle');
 const groupList = document.getElementById('group-list');
-const newGroupForm = document.getElementById('new-group-form');
-const newGroupInput = document.getElementById('new-group-input');
-const joinCodeForm = document.getElementById('join-code-form');
-const joinCodeInput = document.getElementById('join-code-input');
+
+const openCreateBtn = document.getElementById('open-create-group');
+const openJoinBtn = document.getElementById('open-join-group');
+const createOverlay = document.getElementById('create-overlay');
+const createClose = document.getElementById('create-close');
+const createCancel = document.getElementById('create-cancel');
+const createForm = document.getElementById('create-form');
+const createName = document.getElementById('create-name');
+const createVisibility = document.getElementById('create-visibility');
+const joinOverlay = document.getElementById('join-overlay');
+const joinClose = document.getElementById('join-close');
+const joinCancel = document.getElementById('join-cancel');
+const joinForm = document.getElementById('join-form');
+const joinInput = document.getElementById('join-input');
 
 const chatTitle = document.getElementById('chat-title');
+const chatTitleBtn = document.getElementById('chat-title-btn');
+const chatTitleEdit = document.getElementById('chat-title-edit');
 const deleteBtn = document.getElementById('delete-group');
 const adminBtn = document.getElementById('admin-btn');
 const pinnedBar = document.getElementById('pinned-bar');
@@ -90,12 +151,36 @@ const replyBarName = document.getElementById('reply-bar-name');
 const replyBarText = document.getElementById('reply-bar-text');
 const replyCancel = document.getElementById('reply-cancel');
 const mentionPop = document.getElementById('mention-pop');
-const groupNotifCheck = document.getElementById('group-notif');
+const groupNotifToggle = document.getElementById('group-notif-toggle');
+const moderationBlock = document.getElementById('moderation-block');
+const lockToggle = document.getElementById('lock-toggle');
+const slowRange = document.getElementById('slow-range');
+const slowValue = document.getElementById('slow-value');
+const slowHint = document.getElementById('slow-hint');
+const shareLinkBtn = document.getElementById('share-link');
+const floatingMenu = document.getElementById('floating-menu');
+const floatingPicker = document.getElementById('floating-picker');
+
+const urlOverlay = document.getElementById('url-overlay');
+const urlClose = document.getElementById('url-close');
+const urlCancel = document.getElementById('url-cancel');
+const urlForm = document.getElementById('url-form');
+const urlInput = document.getElementById('url-input');
+
+const timeOverlay = document.getElementById('time-overlay');
+const timeClose = document.getElementById('time-close');
+const timeCancel = document.getElementById('time-cancel');
+const timeForm = document.getElementById('time-form');
+const timeDate = document.getElementById('time-date');
+const timeTime = document.getElementById('time-time');
+const timeFormat = document.getElementById('time-format');
+const timePreview = document.getElementById('time-preview');
 
 let replyingTo = null;
 let notifGlobal = localStorage.getItem('notifGlobal') || 'all';
 let restoreScrollFor = null;
 let restored = false;
+let lastSentAt = 0;
 
 const pollBtn = document.getElementById('poll-btn');
 const pollOverlay = document.getElementById('poll-overlay');
@@ -105,8 +190,6 @@ const pollForm = document.getElementById('poll-form');
 const pollQuestion = document.getElementById('poll-question');
 const pollOptionsEl = document.getElementById('poll-options');
 const pollAddOption = document.getElementById('poll-add-option');
-const emojiBtn = document.getElementById('emoji-btn');
-const emojiPop = document.getElementById('emoji-pop');
 const timeBtn = document.getElementById('time-btn');
 
 let unsubTyping = null;
@@ -131,6 +214,47 @@ function isOwnerOf(group) {
 }
 function isBannedFrom(group) {
   return group && currentUser && (group.bannedUids || []).includes(currentUser.uid);
+}
+function isMutedIn(group) {
+  return group && currentUser && (group.mutedUids || []).includes(currentUser.uid);
+}
+function canPostIn(group) {
+  if (!group || !currentUser) return false;
+  if (isMutedIn(group)) return false;
+  if (group.locked && !isAdminOf(group)) return false;
+  return true;
+}
+function updateTitleEdit(group) {
+  const editable = isAdminOf(group);
+  chatTitleBtn.classList.toggle('editable', editable);
+  chatTitleEdit.hidden = !editable;
+  refreshIcons();
+}
+function updateComposerState() {
+  const group = currentGroup();
+  if (!group) return;
+  const muted = isMutedIn(group);
+  const locked = group.locked && !isAdminOf(group);
+  const blocked = muted || locked;
+  messageInput.disabled = blocked;
+  plusBtn.disabled = blocked;
+  slowHint.hidden = true;
+  if (muted) {
+    messageInput.placeholder = 'Tu es muet dans ce groupe.';
+    slowHint.hidden = false;
+    slowHint.innerHTML = '<i data-lucide="mic-off" aria-hidden="true"></i> Tu ne peux pas écrire : tu as été rendu muet.';
+  } else if (locked) {
+    messageInput.placeholder = 'Le chat est bloqué par un administrateur.';
+    slowHint.hidden = false;
+    slowHint.innerHTML = '<i data-lucide="lock" aria-hidden="true"></i> Le chat est bloqué. Seuls les administrateurs peuvent écrire.';
+  } else if (group.slowMode > 0 && !isAdminOf(group)) {
+    messageInput.placeholder = `Mode lent : 1 message toutes les ${group.slowMode} s.`;
+    slowHint.hidden = false;
+    slowHint.innerHTML = `<i data-lucide="timer" aria-hidden="true"></i> Mode lent actif : ${group.slowMode} s entre chaque message.`;
+  } else {
+    messageInput.placeholder = 'Écris un message…  (Entrée pour envoyer, Maj+Entrée pour une ligne)';
+  }
+  refreshIcons();
 }
 function mergeGroups() {
   const map = new Map();
@@ -275,6 +399,7 @@ watchAuth((user) => {
     notifBtn.hidden = false;
     restored = false;
     startGroupsListeners();
+    handleJoinParam();
   } else {
     loginOverlay.hidden = false;
     logoutBtn.hidden = true;
@@ -286,6 +411,20 @@ watchAuth((user) => {
     groupList.innerHTML = '';
   }
 });
+
+let joinParamHandled = false;
+async function handleJoinParam() {
+  if (joinParamHandled) return;
+  const params = new URLSearchParams(location.search);
+  const code = params.get('join');
+  if (!code) return;
+  joinParamHandled = true;
+  restored = true;
+  params.delete('join');
+  const rest = params.toString();
+  history.replaceState(null, '', location.pathname + (rest ? '?' + rest : ''));
+  await doJoin(code);
+}
 
 function pruneExtra(list) {
   list.forEach((g) => extraGroups.delete(g.id));
@@ -346,6 +485,8 @@ function onGroupsChanged() {
     chatTitle.textContent = group.name;
     adminBtn.hidden = false;
     deleteBtn.hidden = !isOwnerOf(group);
+    updateTitleEdit(group);
+    updateComposerState();
     if (!adminOverlay.hidden) renderAdminPanel();
   }
 
@@ -419,13 +560,16 @@ async function selectGroup(id) {
   restored = true;
   restoreScrollFor = id;
   localStorage.setItem('activeGroup', id);
-  groupNotifCheck.checked = localStorage.getItem('gnotif:' + id) !== '0';
 
   chatTitle.textContent = group.name;
   deleteBtn.hidden = !isOwnerOf(group);
   adminBtn.hidden = false;
   composer.hidden = false;
+  updateTitleEdit(group);
   clearReply();
+  messageInput.value = localStorage.getItem('draft:' + id) || '';
+  autoGrow();
+  updateComposerState();
   renderGroups();
 
   if (currentUser) Store.joinGroup(id, currentUser).catch(() => {});
@@ -454,10 +598,18 @@ async function selectGroup(id) {
   unsubTyping = Store.watchTyping(id, renderTyping);
 }
 
+function groupNotifMode(id) {
+  const v = localStorage.getItem('gnotif:' + id);
+  if (v === '0') return 'none';
+  if (v === 'all' || v === 'mentions' || v === 'none') return v;
+  return notifGlobal;
+}
+
 function shouldNotify(m) {
-  if (notifGlobal === 'none') return false;
-  if (localStorage.getItem('gnotif:' + currentGroupId) === '0') return false;
-  if (notifGlobal === 'mentions') return (m.mentions || []).includes(currentUser.uid);
+  const mode = groupNotifMode(currentGroupId);
+  if (mode === 'none' || notifGlobal === 'none') return false;
+  if (mode === 'mentions' || notifGlobal === 'mentions')
+    return (m.mentions || []).includes(currentUser.uid);
   return true;
 }
 
@@ -495,10 +647,12 @@ function renderTyping(list) {
 }
 
 function resetChat() {
-  emojiPop.hidden = true;
+  closeFloating();
   clearReply();
   scrollDown.hidden = true;
   mentionPop.hidden = true;
+  chatTitleEdit.hidden = true;
+  chatTitleBtn.classList.remove('editable');
   if (unsubTyping) { unsubTyping(); unsubTyping = null; }
   if (currentGroupId && currentUser) Store.clearTyping(currentGroupId, currentUser.uid).catch(() => {});
   typingEl.hidden = true;
@@ -598,15 +752,25 @@ function buildBubble(msg) {
   if (msg.image) {
     const img = document.createElement('img');
     img.className = 'bubble-img';
-    img.src = msg.image;
     img.alt = 'image';
     img.loading = 'lazy';
+    img.decoding = 'async';
+    img.referrerPolicy = 'no-referrer';
     if (msg.imgW && msg.imgH) {
-      img.width = msg.imgW;
-      img.height = msg.imgH;
       img.style.aspectRatio = `${msg.imgW} / ${msg.imgH}`;
     }
+    let retried = false;
+    img.addEventListener('error', () => {
+      if (!retried && /^https?:\/\//i.test(msg.image)) {
+        retried = true;
+        const sep = msg.image.includes('?') ? '&' : '?';
+        img.src = msg.image + sep + '_r=' + Date.now();
+        return;
+      }
+      img.replaceWith(buildBrokenImage(msg.image));
+    });
     img.addEventListener('click', () => openLightbox(msg.image));
+    img.src = msg.image;
     bubble.appendChild(img);
   }
 
@@ -652,49 +816,28 @@ function buildBubble(msg) {
   });
   bubble.appendChild(reactRow);
 
-  const picker = document.createElement('div');
-  picker.className = 'emoji-picker';
-  picker.hidden = true;
-  EMOJIS.forEach((emoji) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = emoji;
-    b.addEventListener('click', () => {
-      picker.hidden = true;
-      Store.toggleReaction(currentGroupId, msg, emoji, currentUser.uid).catch(() => {});
-    });
-    picker.appendChild(b);
-  });
-  bubble.appendChild(picker);
-
   const menuBtn = document.createElement('button');
   menuBtn.type = 'button';
   menuBtn.className = 'msg-menu-btn';
   menuBtn.setAttribute('aria-label', 'Options du message');
   menuBtn.innerHTML = '<i data-lucide="more-vertical" aria-hidden="true"></i>';
 
-  const menu = document.createElement('div');
-  menu.className = 'msg-menu';
-  menu.hidden = true;
-  const addItem = (icon, label, handler) => {
-    const it = document.createElement('button');
-    it.type = 'button';
-    it.innerHTML = `<i data-lucide="${icon}" aria-hidden="true"></i><span>${label}</span>`;
-    it.addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = true; handler(e); });
-    menu.appendChild(it);
-  };
-  addItem('smile-plus', 'Réagir', () => { picker.hidden = false; });
+  const items = [];
+  const addItem = (icon, label, handler) => items.push({ icon, label, handler });
+  addItem('smile-plus', 'Réagir', () => openReactionPicker(msg, menuBtn));
   addItem('reply', 'Répondre', () => setReply(msg));
   if (msg.text) {
     addItem('copy', 'Copier', async () => {
       try { await navigator.clipboard.writeText(msg.text); toast('Texte copié.'); }
       catch { toast('Copie impossible.'); }
     });
-    addItem('languages', 'Traduire', () => {
-      if (!translation.hidden) { translation.hidden = true; translation.textContent = ''; return; }
-      translation.hidden = false;
-      translateMessage(msg.text, translation);
-    });
+    if (!looksFrench(msg.text)) {
+      addItem('languages', 'Traduire', () => {
+        if (!translation.hidden) { translation.hidden = true; translation.textContent = ''; return; }
+        translation.hidden = false;
+        translateMessage(msg.text, translation);
+      });
+    }
   }
   if (isMe && msg.text) {
     addItem('pencil', 'Modifier', () => startEdit(msg, bubble));
@@ -721,26 +864,94 @@ function buildBubble(msg) {
   }
   menuBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const willOpen = menu.hidden;
-    closeAllMenus();
-    if (willOpen) {
-      const r = menuBtn.getBoundingClientRect();
-      menu.classList.toggle('up', r.bottom > window.innerHeight - 240);
-    }
-    menu.hidden = !willOpen;
+    openMessageMenu(items, menuBtn);
   });
 
   bubble.appendChild(menuBtn);
-  bubble.appendChild(menu);
   row.appendChild(bubble);
   return row;
 }
 
-function closeAllMenus() {
-  document.querySelectorAll('.msg-menu').forEach((m) => (m.hidden = true));
-  document.querySelectorAll('.emoji-picker').forEach((p) => (p.hidden = true));
+function buildBrokenImage(src) {
+  const box = document.createElement('div');
+  box.className = 'broken-img';
+  box.innerHTML = '<i data-lucide="image-off" aria-hidden="true"></i><span>Image indisponible</span>';
+  if (/^https?:\/\//i.test(src)) {
+    const a = document.createElement('a');
+    a.href = src;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = 'Ouvrir le lien';
+    box.appendChild(a);
+  }
+  refreshIcons();
+  return box;
 }
-document.addEventListener('click', closeAllMenus);
+
+function positionFloating(el, anchor) {
+  el.hidden = false;
+  const r = anchor.getBoundingClientRect();
+  const w = el.offsetWidth;
+  const h = el.offsetHeight;
+  let left = r.right - w;
+  if (left < 8) left = 8;
+  if (left + w > window.innerWidth - 8) left = window.innerWidth - 8 - w;
+  let top = r.bottom + 4;
+  if (top + h > window.innerHeight - 8) top = r.top - h - 4;
+  if (top < 8) top = 8;
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+}
+
+function openMessageMenu(items, anchor) {
+  const open = !floatingMenu.hidden && floatingMenu.dataset.anchor === anchorId(anchor);
+  closeFloating();
+  if (open) return;
+  floatingMenu.dataset.anchor = anchorId(anchor);
+  floatingMenu.innerHTML = '';
+  items.forEach((it) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.innerHTML = `<i data-lucide="${it.icon}" aria-hidden="true"></i><span>${it.label}</span>`;
+    b.addEventListener('click', (e) => { e.stopPropagation(); closeFloating(); it.handler(e); });
+    floatingMenu.appendChild(b);
+  });
+  refreshIcons();
+  positionFloating(floatingMenu, anchor);
+}
+
+function openReactionPicker(msg, anchor) {
+  closeFloating();
+  floatingPicker.innerHTML = '';
+  EMOJIS.forEach((emoji) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = emoji;
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeFloating();
+      Store.toggleReaction(currentGroupId, msg, emoji, currentUser.uid).catch(() => {});
+    });
+    floatingPicker.appendChild(b);
+  });
+  positionFloating(floatingPicker, anchor);
+}
+
+let anchorSeq = 0;
+function anchorId(el) {
+  if (!el.dataset.anchorId) el.dataset.anchorId = String(++anchorSeq);
+  return el.dataset.anchorId;
+}
+
+function closeFloating() {
+  floatingMenu.hidden = true;
+  floatingMenu.dataset.anchor = '';
+  floatingPicker.hidden = true;
+}
+function closeAllMenus() { closeFloating(); }
+document.addEventListener('click', closeFloating);
+window.addEventListener('resize', closeFloating);
+messagesEl.addEventListener('scroll', closeFloating);
 messagesEl.addEventListener('click', (e) => {
   const sp = e.target.closest('.md-spoiler');
   if (sp) sp.classList.add('revealed');
@@ -856,17 +1067,26 @@ function refreshIcons() {
   if (window.lucide) window.lucide.createIcons();
 }
 
+let pendingRestore = null;
 function renderMessages() {
   const atBottom =
     messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 60;
   const prevTop = messagesEl.scrollTop;
   const prevHeight = messagesEl.scrollHeight;
+  closeFloating();
   messagesEl.innerHTML = '';
   currentMessages.forEach((msg) => messagesEl.appendChild(buildBubble(msg)));
   refreshIcons();
   if (restoreScrollFor === currentGroupId) {
-    const saved = Number(localStorage.getItem('scroll:' + currentGroupId));
-    messagesEl.scrollTop = saved || messagesEl.scrollHeight;
+    const raw = localStorage.getItem('scroll:' + currentGroupId);
+    const saved = raw === null ? null : Number(raw);
+    if (saved === null || Number.isNaN(saved)) {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    } else {
+      messagesEl.scrollTop = saved;
+      pendingRestore = { group: currentGroupId, top: saved };
+      reanchorOnLoad();
+    }
     restoreScrollFor = null;
   } else if (atBottom) {
     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -876,14 +1096,36 @@ function renderMessages() {
   updateScrollDown();
 }
 
+function reanchorOnLoad() {
+  const imgs = messagesEl.querySelectorAll('img');
+  imgs.forEach((im) => {
+    if (im.complete) return;
+    im.addEventListener('load', applyPendingRestore, { once: true });
+    im.addEventListener('error', applyPendingRestore, { once: true });
+  });
+}
+function applyPendingRestore() {
+  if (pendingRestore && pendingRestore.group === currentGroupId) {
+    messagesEl.scrollTop = pendingRestore.top;
+    updateScrollDown();
+  }
+}
+
 function updateScrollDown() {
   const far =
     messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight > 200;
   scrollDown.hidden = !far || !currentGroupId;
 }
 
+function cancelRestore() { pendingRestore = null; }
+messagesEl.addEventListener('wheel', cancelRestore, { passive: true });
+messagesEl.addEventListener('touchstart', cancelRestore, { passive: true });
+messagesEl.addEventListener('keydown', cancelRestore);
+
 messagesEl.addEventListener('scroll', () => {
-  if (currentGroupId) localStorage.setItem('scroll:' + currentGroupId, String(messagesEl.scrollTop));
+  if (currentGroupId && !pendingRestore) {
+    localStorage.setItem('scroll:' + currentGroupId, String(messagesEl.scrollTop));
+  }
   updateScrollDown();
 });
 scrollDown.addEventListener('click', () => {
@@ -944,20 +1186,64 @@ adminOverlay.addEventListener('click', (e) => {
 });
 
 copyInviteBtn.addEventListener('click', async () => {
-  const code = inviteCodeEl.textContent.trim();
+  const group = currentGroup();
+  const code = group ? (group.joinCode || '') : '';
   try {
-    await navigator.clipboard.writeText(code);
+    await navigator.clipboard.writeText(formatInviteCode(code));
     copyInviteBtn.textContent = 'Copié !';
     setTimeout(() => (copyInviteBtn.textContent = 'Copier'), 1500);
   } catch {
-    toast('Code : ' + code);
+    toast('Code : ' + formatInviteCode(code));
   }
 });
+
+shareLinkBtn.addEventListener('click', async () => {
+  const group = currentGroup();
+  if (!group) return;
+  const link = inviteLink(group.joinCode);
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: group.name, text: `Rejoins « ${group.name} »`, url: link });
+    } else {
+      await navigator.clipboard.writeText(link);
+      toast('Lien d’invitation copié.');
+    }
+  } catch {
+    toast(link);
+  }
+});
+
+lockToggle.addEventListener('change', () => {
+  if (!currentGroupId) return;
+  Store.setLocked(currentGroupId, lockToggle.checked).catch((err) => toast('Action impossible : ' + err.message));
+});
+
+function slowLabel(s) { return s > 0 ? `${s} s` : 'Désactivé'; }
+slowRange.addEventListener('input', () => { slowValue.textContent = slowLabel(Number(slowRange.value)); });
+slowRange.addEventListener('change', () => {
+  if (!currentGroupId) return;
+  Store.setSlowMode(currentGroupId, Number(slowRange.value)).catch((err) => toast('Action impossible : ' + err.message));
+});
+
+groupNotifToggle.querySelectorAll('button').forEach((b) => {
+  b.addEventListener('click', () => {
+    if (!currentGroupId) return;
+    localStorage.setItem('gnotif:' + currentGroupId, b.dataset.v);
+    updateGroupNotifToggle(currentGroupId);
+  });
+});
+function updateGroupNotifToggle(id) {
+  const stored = localStorage.getItem('gnotif:' + id);
+  const mode = stored === '0' ? 'none' : (stored || '');
+  groupNotifToggle.querySelectorAll('button').forEach((b) =>
+    b.classList.toggle('active', b.dataset.v === mode)
+  );
+}
 
 function renderAdminPanel() {
   const group = currentGroup();
   if (!group) return;
-  inviteCodeEl.textContent = group.joinCode || '------';
+  inviteCodeEl.textContent = formatInviteCode(group.joinCode);
   const iAmAdmin = isAdminOf(group);
   renameBlock.hidden = !iAmAdmin;
   if (iAmAdmin) renameInput.value = group.name || '';
@@ -970,6 +1256,13 @@ function renderAdminPanel() {
     vis === 'public'
       ? 'Visible et rejoignable par tout le monde.'
       : 'Accessible uniquement avec le code d’invitation.';
+
+  moderationBlock.hidden = !iAmAdmin;
+  lockToggle.checked = !!group.locked;
+  slowRange.value = String(group.slowMode || 0);
+  slowValue.textContent = slowLabel(group.slowMode || 0);
+
+  updateGroupNotifToggle(currentGroupId);
 
   renderMembers(group);
 }
@@ -1084,6 +1377,28 @@ function renderMembers(group) {
     }
 
     if (iAmAdmin && !owner && !isSelf) {
+      const isMuted = (group.mutedUids || []).includes(m.uid);
+      const muteBtn = document.createElement('button');
+      muteBtn.className = 'icon-btn';
+      muteBtn.title = isMuted ? 'Réactiver (rendre la parole)' : 'Rendre muet';
+      muteBtn.setAttribute('aria-label', muteBtn.title);
+      muteBtn.innerHTML = `<i data-lucide="${isMuted ? 'mic' : 'mic-off'}" aria-hidden="true"></i>`;
+      muteBtn.addEventListener('click', async () => {
+        try {
+          await Store.setMuted(currentGroupId, m.uid, !isMuted);
+          await Store.addSystemMessage(
+            currentGroupId,
+            `${m.name} a été ${isMuted ? 'réactivé' : 'rendu muet'}`,
+            currentUser
+          );
+        } catch (err) {
+          toast('Action impossible : ' + err.message);
+        }
+      });
+      right.appendChild(muteBtn);
+    }
+
+    if (iAmAdmin && !owner && !isSelf) {
       const isBanned = banned.includes(m.uid);
       const btn = document.createElement('button');
       btn.className = isBanned ? 'btn-ghost' : 'btn-danger';
@@ -1109,35 +1424,68 @@ function renderMembers(group) {
   refreshIcons();
 }
 
-newGroupForm.addEventListener('submit', async (e) => {
+let createVis = 'private';
+function openCreateModal() {
+  createName.value = '';
+  createVis = 'private';
+  createVisibility.querySelectorAll('button').forEach((b) =>
+    b.classList.toggle('active', b.dataset.value === 'private')
+  );
+  createOverlay.hidden = false;
+  refreshIcons();
+  createName.focus();
+}
+openCreateBtn.addEventListener('click', openCreateModal);
+createClose.addEventListener('click', () => { createOverlay.hidden = true; });
+createCancel.addEventListener('click', () => { createOverlay.hidden = true; });
+createOverlay.addEventListener('click', (e) => { if (e.target === createOverlay) createOverlay.hidden = true; });
+createVisibility.querySelectorAll('button').forEach((b) => {
+  b.addEventListener('click', () => {
+    createVis = b.dataset.value;
+    createVisibility.querySelectorAll('button').forEach((x) =>
+      x.classList.toggle('active', x === b)
+    );
+  });
+});
+createForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const name = newGroupInput.value.trim();
+  const name = createName.value.trim();
   if (!name || !currentUser) return;
-  newGroupInput.value = '';
+  createOverlay.hidden = true;
   try {
-    const ref = await Store.addGroup(name, currentUser);
+    const ref = await Store.addGroup(name, currentUser, createVis);
     selectGroup(ref.id);
   } catch (err) {
     toast('Impossible de créer le groupe : ' + err.message);
   }
 });
 
-joinCodeForm.addEventListener('submit', async (e) => {
+function openJoinModal() {
+  joinInput.value = '';
+  joinOverlay.hidden = false;
+  joinInput.focus();
+}
+openJoinBtn.addEventListener('click', openJoinModal);
+joinClose.addEventListener('click', () => { joinOverlay.hidden = true; });
+joinCancel.addEventListener('click', () => { joinOverlay.hidden = true; });
+joinOverlay.addEventListener('click', (e) => { if (e.target === joinOverlay) joinOverlay.hidden = true; });
+joinForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const code = joinCodeInput.value.trim();
+  await doJoin(joinInput.value);
+});
+
+async function doJoin(raw) {
+  const code = (raw || '').trim();
   if (!code || !currentUser) return;
   try {
     const groupId = await Store.joinByCode(code, currentUser);
-    joinCodeInput.value = '';
-    if (!groupId) {
-      toast('Code invalide.');
-      return;
-    }
+    joinOverlay.hidden = true;
+    if (!groupId) { toast('Code invalide.'); return; }
     selectGroup(groupId);
   } catch (err) {
     toast('Impossible de rejoindre : ' + err.message);
   }
-});
+}
 
 deleteBtn.addEventListener('click', async () => {
   const group = currentGroup();
@@ -1293,8 +1641,13 @@ previewOverlay.addEventListener('click', (e) => {
 
 previewSend.addEventListener('click', async () => {
   if (!pendingImages.length || !currentGroupId || !currentUser) return;
+  if (!canPostIn(currentGroup())) {
+    toast(isMutedIn(currentGroup()) ? 'Tu es muet dans ce groupe.' : 'Le chat est bloqué.');
+    return;
+  }
   const imgs = pendingImages.slice();
   const text = messageInput.value.trim();
+  if (findProfanity(text)) { toast('Message bloqué : langage inapproprié.', 'error'); return; }
   const reply = replyingTo;
   const mentions = computeMentions(text);
   closePreview();
@@ -1320,6 +1673,10 @@ previewSend.addEventListener('click', async () => {
 
 function sendMediaUrl(url) {
   if (!currentGroupId || !currentUser) return;
+  if (!canPostIn(currentGroup())) {
+    toast(isMutedIn(currentGroup()) ? 'Tu es muet dans ce groupe.' : 'Le chat est bloqué.');
+    return;
+  }
   const clean = url.trim();
   if (!/^https:\/\//i.test(clean)) { toast('URL invalide (https requis).'); return; }
   Store.addMessage(currentGroupId, {
@@ -1346,20 +1703,138 @@ composer.addEventListener('submit', async (e) => {
   e.preventDefault();
   const text = messageInput.value.trim();
   if (!text || !currentGroupId || !currentUser) return;
+  const group = currentGroup();
+
+  if (text.startsWith('/')) {
+    const handled = await handleCommand(text);
+    if (handled) {
+      messageInput.value = '';
+      localStorage.removeItem('draft:' + currentGroupId);
+      autoGrow();
+      mentionPop.hidden = true;
+      stopTyping();
+      return;
+    }
+  }
+
+  if (!canPostIn(group)) {
+    toast(isMutedIn(group) ? 'Tu es muet dans ce groupe.' : 'Le chat est bloqué.');
+    return;
+  }
+
+  const slow = group && group.slowMode > 0 && !isAdminOf(group) ? group.slowMode : 0;
+  if (slow) {
+    const wait = Math.ceil((lastSentAt + slow * 1000 - Date.now()) / 1000);
+    if (wait > 0) { toast(`Mode lent : attends encore ${wait} s.`); return; }
+  }
+
+  const bad = findProfanity(text);
+  if (bad) {
+    toast('Message bloqué : langage inapproprié détecté.', 'error');
+    return;
+  }
+
   const reply = replyingTo;
   const mentions = computeMentions(text);
   messageInput.value = '';
+  localStorage.removeItem('draft:' + currentGroupId);
   autoGrow();
   mentionPop.hidden = true;
   stopTyping();
   clearReply();
   try {
     await Store.addMessage(currentGroupId, { text, user: currentUser, reply, mentions });
+    lastSentAt = Date.now();
     messagesEl.scrollTop = messagesEl.scrollHeight;
   } catch (err) {
     toast('Envoi impossible : ' + err.message);
   }
 });
+
+function resolveMention(token) {
+  if (!token) return null;
+  const q = token.replace(/^@/, '').toLowerCase();
+  return currentMembers.find((m) => {
+    const n = (m.name || '').toLowerCase();
+    return n === q || n.split(' ')[0] === q || n.startsWith(q);
+  });
+}
+
+async function handleCommand(text) {
+  const m = text.match(/^\/group\s+(\w+)\s*(.*)$/i);
+  if (!m) return false;
+  const group = currentGroup();
+  if (!group) return false;
+  const cmd = m[1].toLowerCase();
+  const arg = m[2].trim();
+  const admin = isAdminOf(group);
+  const owner = isOwnerOf(group);
+
+  const needAdmin = () => {
+    if (!admin) { toast("Réservé aux administrateurs."); return false; }
+    return true;
+  };
+
+  try {
+    if (cmd === 'clear') {
+      if (!needAdmin()) return true;
+      const n = arg.toLowerCase() === 'all' ? 'all' : parseInt(arg, 10);
+      if (n !== 'all' && (!n || n < 1)) { toast('Usage : /group clear <nombre|all>'); return true; }
+      const ok = await confirmModal(n === 'all' ? 'Supprimer TOUS les messages ?' : `Supprimer les ${n} derniers messages ?`);
+      if (!ok) return true;
+      const count = await Store.clearMessages(currentGroupId, n);
+      toast(`${count} message(s) supprimé(s).`);
+      return true;
+    }
+
+    if (cmd === 'rename') {
+      if (!needAdmin()) return true;
+      if (!arg) { toast('Usage : /group rename <nom>'); return true; }
+      await Store.renameGroup(currentGroupId, arg.slice(0, 40));
+      toast('Groupe renommé.');
+      return true;
+    }
+
+    if (cmd === 'visibility') {
+      if (!needAdmin()) return true;
+      const v = arg.toLowerCase();
+      if (v !== 'public' && v !== 'private') { toast('Usage : /group visibility <public|private>'); return true; }
+      await Store.setVisibility(currentGroupId, v);
+      toast('Visibilité : ' + v + '.');
+      return true;
+    }
+
+    if (cmd === 'mod' || cmd === 'ban' || cmd === 'timeout') {
+      if (!needAdmin()) return true;
+      const target = resolveMention(arg);
+      if (!target) { toast('Membre introuvable. Usage : /group ' + cmd + ' @nom'); return true; }
+      if (target.uid === group.createdBy) { toast('Action impossible sur le propriétaire.'); return true; }
+      if (cmd === 'mod') {
+        if (!owner) { toast('Seul le propriétaire peut nommer un admin.'); return true; }
+        const isMod = (group.adminUids || []).includes(target.uid);
+        await Store.setAdmin(currentGroupId, target.uid, !isMod);
+        await Store.addSystemMessage(currentGroupId, `${target.name} ${isMod ? "n'est plus" : 'est désormais'} admin`, currentUser);
+        toast(isMod ? 'Droits admin retirés.' : target.name + ' est admin.');
+      } else if (cmd === 'ban') {
+        await Store.setBanned(currentGroupId, target.uid, true);
+        await Store.addSystemMessage(currentGroupId, `${target.name} a été banni`, currentUser);
+        toast(target.name + ' banni.');
+      } else if (cmd === 'timeout') {
+        const isMuted = (group.mutedUids || []).includes(target.uid);
+        await Store.setMuted(currentGroupId, target.uid, !isMuted);
+        await Store.addSystemMessage(currentGroupId, `${target.name} a été ${isMuted ? 'réactivé' : 'rendu muet'}`, currentUser);
+        toast(isMuted ? target.name + ' peut réécrire.' : target.name + ' est muet.');
+      }
+      return true;
+    }
+
+    toast('Commande inconnue. /group clear|mod|timeout|ban|rename|visibility');
+    return true;
+  } catch (err) {
+    toast('Commande impossible : ' + err.message);
+    return true;
+  }
+}
 
 plusBtn.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -1371,15 +1846,46 @@ document.addEventListener('click', (e) => {
 });
 
 urlBtn.addEventListener('click', () => {
-  const url = window.prompt('Colle l’URL de l’image ou du GIF (https) :');
-  if (url) sendMediaUrl(url);
+  urlInput.value = '';
+  urlOverlay.hidden = false;
+  urlInput.focus();
+});
+urlClose.addEventListener('click', () => { urlOverlay.hidden = true; });
+urlCancel.addEventListener('click', () => { urlOverlay.hidden = true; });
+urlOverlay.addEventListener('click', (e) => { if (e.target === urlOverlay) urlOverlay.hidden = true; });
+urlForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const url = urlInput.value.trim();
+  if (!url) return;
+  urlOverlay.hidden = true;
+  sendMediaUrl(url);
+});
+
+chatTitleBtn.addEventListener('click', () => {
+  const group = currentGroup();
+  if (!group || !isAdminOf(group)) return;
+  adminOverlay.hidden = false;
+  renderAdminPanel();
+  renameInput.focus();
+  renameInput.select();
 });
 
 function autoGrow() {
+  const atBottom =
+    messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 60;
   messageInput.style.height = 'auto';
-  messageInput.style.height = Math.min(messageInput.scrollHeight, 140) + 'px';
+  const full = messageInput.scrollHeight;
+  messageInput.style.height = Math.min(full, 140) + 'px';
+  messageInput.classList.toggle('scrollable', full > 140);
+  if (atBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 messageInput.addEventListener('input', autoGrow);
+messageInput.addEventListener('input', () => {
+  if (currentGroupId) {
+    if (messageInput.value) localStorage.setItem('draft:' + currentGroupId, messageInput.value);
+    else localStorage.removeItem('draft:' + currentGroupId);
+  }
+});
 messageInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
@@ -1494,10 +2000,6 @@ notifMenu.querySelectorAll('button').forEach((b) => {
   });
 });
 
-groupNotifCheck.addEventListener('change', () => {
-  if (!currentGroupId) return;
-  localStorage.setItem('gnotif:' + currentGroupId, groupNotifCheck.checked ? '1' : '0');
-});
 
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
@@ -1529,31 +2031,35 @@ function insertText(t) {
   el.setSelectionRange(pos, pos);
 }
 
-function renderEmojiPop() {
-  emojiPop.innerHTML = '';
-  const grid = document.createElement('div');
-  grid.className = 'emoji-grid';
-  PICKER_EMOJIS.forEach((e) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.textContent = e;
-    b.addEventListener('click', () => insertText(e));
-    grid.appendChild(b);
-  });
-  emojiPop.appendChild(grid);
+function pad2(n) { return String(n).padStart(2, '0'); }
+function timeModalTimestamp() {
+  const d = timeDate.value ? new Date(timeDate.value + 'T' + (timeTime.value || '00:00')) : new Date();
+  return Math.floor(d.getTime() / 1000);
 }
-
-emojiBtn.addEventListener('click', (e) => {
-  e.stopPropagation();
-  emojiPop.hidden = !emojiPop.hidden;
-  if (!emojiPop.hidden) renderEmojiPop();
-});
-document.addEventListener('click', (e) => {
-  if (!emojiPop.hidden && !e.target.closest('.emoji-wrap')) emojiPop.hidden = true;
-});
-
-timeBtn.addEventListener('click', () => {
-  insertText(`<t:${Math.floor(Date.now() / 1000)}:R>`);
+function updateTimePreview() {
+  const sec = timeModalTimestamp();
+  const tmp = document.createElement('div');
+  tmp.innerHTML = formatDiscordTs(sec, timeFormat.value);
+  timePreview.textContent = 'Aperçu : ' + (tmp.textContent || '');
+}
+function openTimeModal() {
+  const now = new Date();
+  timeDate.value = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+  timeTime.value = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+  timeFormat.value = 'R';
+  updateTimePreview();
+  timeOverlay.hidden = false;
+}
+timeBtn.addEventListener('click', openTimeModal);
+timeClose.addEventListener('click', () => { timeOverlay.hidden = true; });
+timeCancel.addEventListener('click', () => { timeOverlay.hidden = true; });
+timeOverlay.addEventListener('click', (e) => { if (e.target === timeOverlay) timeOverlay.hidden = true; });
+[timeDate, timeTime, timeFormat].forEach((el) => el.addEventListener('input', updateTimePreview));
+timeForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  insertText(`<t:${timeModalTimestamp()}:${timeFormat.value}>`);
+  timeOverlay.hidden = true;
+  autoGrow();
 });
 
 function addPollOptionInput() {
