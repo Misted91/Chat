@@ -328,11 +328,11 @@ function renderMarkdown(raw) {
   let s = raw;
   s = s.replace(/```(?:[a-zA-Z0-9]+)?\n?([\s\S]*?)```/g, (m, c) => {
     codeBlocks.push(c.replace(/\n$/, ''));
-    return ` CB${codeBlocks.length - 1} `;
+    return `CB${codeBlocks.length - 1}`;
   });
   s = s.replace(/`([^`\n]+?)`/g, (m, c) => {
     inlineCodes.push(c);
-    return ` IC${inlineCodes.length - 1} `;
+    return `IC${inlineCodes.length - 1}`;
   });
   s = escapeHtml(s);
   s = s.replace(/^(#{1,6})\s+(.*)$/gm, (m, h, t) => `<span class="md-h md-h${h.length}">${t}</span>`);
@@ -352,8 +352,8 @@ function renderMarkdown(raw) {
   s = s.replace(/(^|[^"'=>])(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>');
   s = s.replace(/&lt;t:(\d+)(?::([tTdDfFR]))?&gt;/g, (m, sec, fmt) => formatDiscordTs(Number(sec), fmt || 'f'));
   s = s.replace(/\n/g, '<br>');
-  s = s.replace(/ IC(\d+) /g, (m, i) => `<code class="md-inline">${escapeHtml(inlineCodes[+i])}</code>`);
-  s = s.replace(/ CB(\d+) /g, (m, i) => `<pre class="md-code">${escapeHtml(codeBlocks[+i])}</pre>`);
+  s = s.replace(/IC(\d+)/g, (m, i) => `<code class="md-inline">${escapeHtml(inlineCodes[+i])}</code>`);
+  s = s.replace(/CB(\d+)/g, (m, i) => `<pre class="md-code">${escapeHtml(codeBlocks[+i])}</pre>`);
   return s;
 }
 
