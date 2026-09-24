@@ -346,7 +346,10 @@ function formatDiscordTs(sec, fmt) {
   else if (fmt === 'd') out = d.toLocaleDateString('fr-FR');
   else if (fmt === 'D') out = d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
   else if (fmt === 'F') out = d.toLocaleString('fr-FR', { dateStyle: 'full', timeStyle: 'short' });
-  else out = d.toLocaleString('fr-FR');
+  else out =
+    d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) +
+    ' ' +
+    d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   return `<span class="md-ts">${out}</span>`;
 }
 
@@ -356,8 +359,12 @@ function renderMarkdown(raw) {
   const links = [];
   const S = '';
   let s = raw;
-  s = s.replace(/```([a-zA-Z0-9+#-]+)?\n?([\s\S]*?)```/g, (m, lang, c) => {
-    codeBlocks.push({ code: c.replace(/^\n+/, '').replace(/\n+$/, ''), lang: (lang || '').toLowerCase() });
+  s = s.replace(/```([^\n]*)(?:\n([\s\S]*?))?```/g, (m, first, rest) => {
+    let title, code;
+    if (rest === undefined) { title = ''; code = first; }
+    else { title = first.trim(); code = rest; }
+    code = code.replace(/^\n+/, '').replace(/\n+$/, '');
+    codeBlocks.push({ code, title });
     return `${S}CB${codeBlocks.length - 1}${S}`;
   });
   s = s.replace(/`([^`\n]+?)`/g, (m, c) => {
@@ -393,9 +400,118 @@ function renderMarkdown(raw) {
   s = s.replace(new RegExp(S + 'IC(\\d+)' + S, 'g'), (m, i) => `<code class="md-inline">${escapeHtml(inlineCodes[+i])}</code>`);
   s = s.replace(new RegExp(S + 'CB(\\d+)' + S, 'g'), (m, i) => {
     const b = codeBlocks[+i];
-    const lang = b.lang ? escapeHtml(b.lang) : 'code';
-    return `<div class="code-wrap"><div class="code-head"><span class="code-lang">${lang}</span><button type="button" class="code-copy" aria-label="Copier le code"><i data-lucide="copy" aria-hidden="true"></i></button></div><pre class="md-code">${escapeHtml(b.code)}</pre></div>`;
+    const title = escapeHtml(b.title || 'Code');
+    const lines = highlightCode(b.code);
+    const gutter = lines.map((_, n) => n + 1).join('\n');
+    const body = lines.join('\n');
+    return `<div class="code-wrap"><div class="code-head"><span class="code-lang">${title}</span><button type="button" class="code-copy" aria-label="Copier le code"><i data-lucide="copy" aria-hidden="true"></i></button></div><div class="code-body"><span class="code-gutter" aria-hidden="true">${gutter}</span><pre class="md-code"><code>${body}</code></pre></div></div>`;
   });
+  return s;
+}
+
+const CODE_KW = new Set([
+  'if', 'else', 'for', 'while', 'do', 'return', 'class', 'struct', 'public', 'private',
+  'protected', 'void', 'int', 'char', 'bool', 'short', 'long', 'float', 'double', 'unsigned',
+  'signed', 'const', 'constexpr', 'static', 'virtual', 'override', 'new', 'delete', 'using',
+  'namespace', 'template', 'typename', 'this', 'true', 'false', 'nullptr', 'null', 'undefined',
+  'function', 'var', 'let', 'def', 'import', 'export', 'from', 'as', 'try', 'catch', 'finally',
+  'throw', 'switch', 'case', 'break', 'continue', 'default', 'enum', 'typedef', 'sizeof', 'std',
+  'auto', 'extern', 'inline', 'operator', 'friend', 'mutable', 'volatile', 'union', 'goto',
+  'and', 'or', 'not', 'in', 'is', 'lambda', 'async', 'await', 'yield', 'with', 'pass', 'elif',
+  'string', 'vector', 'map', 'size_t', 'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t', 'wchar_t',
+  'of', 'instanceof', 'typeof', 'super', 'extends', 'implements', 'interface', 'type', 'self',
+]);
+
+function highlightLine(line, inBlock) {
+  let html = '';
+  let rest = line;
+  if (inBlock) {
+    const end = rest.indexOf('*/');
+    if (end === -1) return { html: `<span class="tok-com">${escapeHtml(rest)}</span>`, block: true };
+    html += `<span class="tok-com">${escapeHtml(rest.slice(0, end + 2))}</span>`;
+    rest = rest.slice(end + 2);
+  }
+  let block = false;
+  let i = 0;
+  const n = rest.length;
+  while (i < n) {
+    const ch = rest[i];
+    const two = rest.slice(i, i + 2);
+    if (two === '/*') {
+      const end = rest.indexOf('*/', i + 2);
+      if (end === -1) { html += `<span class="tok-com">${escapeHtml(rest.slice(i))}</span>`; block = true; break; }
+      html += `<span class="tok-com">${escapeHtml(rest.slice(i, end + 2))}</span>`; i = end + 2; continue;
+    }
+    if (two === '//') { html += `<span class="tok-com">${escapeHtml(rest.slice(i))}</span>`; break; }
+    if (ch === '#') {
+      const dir = /^#\s*(include|define|pragma|ifndef|ifdef|endif|if|elif|else|undef|error|line)\b/.test(rest.slice(i));
+      html += `<span class="${dir ? 'tok-pre' : 'tok-com'}">${escapeHtml(rest.slice(i))}</span>`; break;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      let j = i + 1;
+      while (j < n && rest[j] !== ch) { if (rest[j] === '\\') j++; j++; }
+      j = Math.min(j + 1, n);
+      html += `<span class="tok-str">${escapeHtml(rest.slice(i, j))}</span>`; i = j; continue;
+    }
+    if (/[0-9]/.test(ch) && !/[A-Za-z_]/.test(rest[i - 1] || '')) {
+      const mnum = /^(0[xX][0-9a-fA-F]+|\d[\d._]*(?:\.\d+)?(?:[eE][+-]?\d+)?[fFlLuU]*)/.exec(rest.slice(i));
+      if (mnum) { html += `<span class="tok-num">${escapeHtml(mnum[0])}</span>`; i += mnum[0].length; continue; }
+    }
+    if (/[A-Za-z_]/.test(ch)) {
+      const w = /^[A-Za-z_]\w*/.exec(rest.slice(i))[0];
+      const after = rest.slice(i + w.length);
+      let cls = null;
+      if (CODE_KW.has(w)) cls = 'tok-key';
+      else if (/^\s*\(/.test(after)) cls = 'tok-fn';
+      else if (/^[A-Z]/.test(w)) cls = 'tok-type';
+      html += cls ? `<span class="${cls}">${escapeHtml(w)}</span>` : escapeHtml(w);
+      i += w.length; continue;
+    }
+    html += escapeHtml(ch); i++;
+  }
+  return { html, block };
+}
+
+function highlightCode(code) {
+  const lines = code.split('\n');
+  let inBlock = false;
+  return lines.map((line) => {
+    const r = highlightLine(line, inBlock);
+    inBlock = r.block;
+    return r.html;
+  });
+}
+
+function renderPreview(raw) {
+  const codes = [];
+  let s = raw;
+  s = s.replace(/```([^\n]*)(?:\n([\s\S]*?))?```/g, (m, first, rest) => {
+    const c = (rest === undefined ? first : (first ? first + ' ' : '') + rest).replace(/\s+/g, ' ').trim();
+    codes.push(c);
+    return `\uE000P${codes.length - 1}\uE000`;
+  });
+  s = s.replace(/`([^`\n]+?)`/g, (m, c) => { codes.push(c); return `\uE000P${codes.length - 1}\uE000`; });
+  s = escapeHtml(s);
+  s = s.replace(/&lt;t:(\d+)(?::([tTdDfFR]))?&gt;/g, (m, sec, fmt) => {
+    const el = document.createElement('div');
+    el.innerHTML = formatDiscordTs(Number(sec), fmt || 'f');
+    return escapeHtml(el.textContent || '');
+  });
+  s = s.replace(/^#{1,6}\s+(.*)$/gm, '<strong>$1</strong>');
+  s = s.replace(/^-#\s+(.*)$/gm, '$1');
+  s = s.replace(/^&gt;+\s?(.*)$/gm, '$1');
+  s = s.replace(/^(?:\*|-)\s+(.*)$/gm, '• $1');
+  s = s.replace(/^(\d+)\.\s+(.*)$/gm, '$1. $2');
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1');
+  s = s.replace(/\|\|([^\n]+?)\|\|/g, '$1');
+  s = s.replace(/\*\*\*([^*]+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+  s = s.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*([^*\n]+?)\*/g, '<em>$1</em>');
+  s = s.replace(/~~([^~]+?)~~/g, '<del>$1</del>');
+  s = s.replace(/__([^_\n]+?)__/g, '<u>$1</u>');
+  s = s.replace(/_([^_\n]+?)_/g, '<em>$1</em>');
+  s = s.replace(/\n+/g, ' ');
+  s = s.replace(/\uE000P(\d+)\uE000/g, (m, i) => `<code class="md-inline">${escapeHtml(codes[+i])}</code>`);
   return s;
 }
 function relativeTime(date) {
@@ -897,8 +1013,8 @@ function buildBubble(msg) {
     qn.className = 'reply-quote__name';
     qn.textContent = msg.replyToName || '';
     const qt = document.createElement('span');
-    qt.className = 'reply-quote__text';
-    qt.textContent = msg.replyToText || '';
+    qt.className = 'reply-quote__text md-preview';
+    qt.innerHTML = renderPreview(msg.replyToText || '');
     quote.appendChild(qn);
     quote.appendChild(qt);
     quote.addEventListener('click', () => scrollToMessage(msg.replyTo));
@@ -1189,12 +1305,12 @@ function startEdit(msg, bubble, opts = {}) {
   const syncState = () => {
     editing = { id: msg.id, draft: ta.value, start: ta.selectionStart, end: ta.selectionEnd };
   };
-  editing = { id: msg.id, draft: ta.value, start: ta.value.length, end: ta.value.length };
+  editing = { id: msg.id, draft: ta.value, start: 0, end: 0 };
   ta.addEventListener('input', () => { grow(); syncState(); ensureActionsVisible(); });
   ta.addEventListener('keyup', syncState);
   ta.addEventListener('click', syncState);
   grow();
-  const caret = opts.start != null ? opts.start : ta.value.length;
+  const caret = opts.start != null ? opts.start : 0;
   const caretEnd = opts.end != null ? opts.end : caret;
   ta.setSelectionRange(caret, caretEnd);
   ta.focus({ preventScroll: true });
@@ -1438,8 +1554,9 @@ function renderPinned() {
     name.className = 'reply-bar__name';
     name.textContent = msg.authorName || 'Anonyme';
     const text = document.createElement('span');
-    text.className = 'reply-bar__text';
-    text.textContent = msg.text || (msg.image ? 'Image' : msg.audio ? 'Audio' : '');
+    text.className = 'reply-bar__text md-preview';
+    if (msg.text) text.innerHTML = renderPreview(msg.text);
+    else text.textContent = msg.image ? 'Image' : msg.audio ? 'Audio' : '';
     label.appendChild(name);
     label.appendChild(text);
     label.addEventListener('click', () => scrollToMessage(msg.id));
@@ -2301,7 +2418,7 @@ function setReply(msg) {
   replyMention = true;
   updateReplyMentionBtn();
   replyBarName.textContent = replyingTo.name;
-  replyBarText.textContent = replyingTo.text;
+  replyBarText.innerHTML = renderPreview(replyingTo.text);
   replyBar.hidden = false;
   refreshIcons();
   if (wasBottom) messagesEl.scrollTop = messagesEl.scrollHeight;

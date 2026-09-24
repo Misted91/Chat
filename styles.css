@@ -609,9 +609,12 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   color: var(--muted);
 }
 .code-lang {
-  text-transform: uppercase;
-  letter-spacing: .05em;
+  letter-spacing: .02em;
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 .code-copy {
   display: inline-flex;
@@ -631,6 +634,49 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
 .bubble.me .code-head { color: #dbe4ff; }
 .bubble.me .code-copy { color: #dbe4ff; }
 .bubble.me .code-copy:hover { color: #fff; }
+
+.code-body { display: flex; align-items: stretch; background: #1e1e2a; }
+.code-gutter {
+  flex: none;
+  user-select: none;
+  text-align: right;
+  padding: 8px 8px 8px 10px;
+  color: rgba(255, 255, 255, .28);
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: .9em;
+  line-height: 1.5;
+  white-space: pre;
+  border-right: 1px solid rgba(255, 255, 255, .08);
+}
+.code-body .md-code {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 12px;
+  white-space: pre;
+  overflow-x: auto;
+  line-height: 1.5;
+  color: #d4d4d4;
+}
+.bubble.me .code-body .md-code { color: #d4d4d4; }
+.tok-com { color: #6a9955; }
+.tok-str { color: #ce9178; }
+.tok-num { color: #b5cea8; }
+.tok-key { color: #569cd6; }
+.tok-type { color: #4ec9b0; }
+.tok-fn { color: #dcdcaa; }
+.tok-pre { color: #c586c0; }
+
+.md-preview .md-h, .md-preview .md-h1, .md-preview .md-h2, .md-preview .md-h3,
+.md-preview .md-h4, .md-preview .md-h5, .md-preview .md-h6, .md-preview .md-sub {
+  font-size: inherit;
+  font-weight: 700;
+  display: inline;
+  margin: 0;
+  color: inherit;
+}
+.md-preview strong { font-weight: 700; }
+.md-preview .md-code, .md-preview .code-wrap { display: inline; }
 .bubble .text > *:first-child { margin-top: 0; }
 .bubble .text > *:last-child { margin-bottom: 0; }
 .md-quote {
@@ -1283,7 +1329,8 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   margin-top: 4px;
   box-sizing: border-box;
 }
-.edit-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; margin-bottom: 6px; }
+.edit-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 6px; margin-bottom: 0; }
+.edit-actions button { white-space: nowrap; }
 .bubble.me .edit-area { background: rgba(0, 0, 0, .25); color: #fff; }
 .bubble.me .btn-ghost {
   border-color: rgba(255, 255, 255, .35);
