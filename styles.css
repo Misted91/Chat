@@ -800,6 +800,7 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
 .group-pin { width: 13px; height: 13px; flex: none; color: var(--accent); }
 .group-item.active .group-pin { color: #fff; }
 .group-unread { width: 9px; height: 9px; flex: none; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--panel); }
+.group-unread--mention { background: var(--danger); }
 .group-item.has-unread .group-name { font-weight: 700; color: var(--text); }
 .group-item.active .group-unread { background: #fff; }
 .group-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

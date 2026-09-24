@@ -620,9 +620,10 @@ function renderGroups() {
 
     if (groupUnread.has(group.id) && group.id !== currentGroupId) {
       li.classList.add('has-unread');
+      const mention = groupMention.has(group.id);
       const dot = document.createElement('span');
-      dot.className = 'group-unread';
-      dot.setAttribute('aria-label', 'Nouveaux messages');
+      dot.className = 'group-unread' + (mention ? ' group-unread--mention' : '');
+      dot.setAttribute('aria-label', mention ? 'Tu as été mentionné' : 'Nouveaux messages');
       li.appendChild(dot);
     }
 
@@ -647,6 +648,7 @@ async function selectGroup(id) {
   }
   currentGroupId = id;
   groupUnread.delete(id);
+  groupMention.delete(id);
   let group = currentGroup();
 
   if (!group) {
@@ -715,6 +717,7 @@ function shouldNotifyFor(id, m) {
 const groupWatchers = new Map();
 const groupPrimed = new Set();
 const groupUnread = new Set();
+const groupMention = new Set();
 
 function syncGroupWatchers() {
   if (!currentUser) return;
@@ -726,6 +729,7 @@ function syncGroupWatchers() {
       groupWatchers.delete(id);
       groupPrimed.delete(id);
       groupUnread.delete(id);
+      groupMention.delete(id);
     }
   }
   mine.forEach((g) => {
@@ -740,6 +744,7 @@ function stopGroupWatchers() {
   groupWatchers.clear();
   groupPrimed.clear();
   groupUnread.clear();
+  groupMention.clear();
 }
 
 function onGroupLatest(id, msgs) {
@@ -750,6 +755,7 @@ function onGroupLatest(id, msgs) {
   if (!currentUser || m.author === currentUser.uid || m.system) return;
   if (id === currentGroupId && !document.hidden) return;
   groupUnread.add(id);
+  if ((m.mentions || []).includes(currentUser.uid)) groupMention.add(id);
   renderGroups();
   if (!shouldNotifyFor(id, m)) return;
   const body = m.text || (m.image ? 'Image' : m.audio ? 'Audio' : '');
@@ -764,7 +770,9 @@ function onGroupLatest(id, msgs) {
 }
 
 function clearUnread(id) {
-  if (groupUnread.delete(id)) renderGroups();
+  const had = groupUnread.delete(id);
+  const hadM = groupMention.delete(id);
+  if (had || hadM) renderGroups();
 }
 
 document.addEventListener('visibilitychange', () => {
@@ -1897,16 +1905,13 @@ function imageDims(src) {
   });
 }
 
-imageInput.addEventListener('change', async () => {
-  const files = [...(imageInput.files || [])];
-  imageInput.value = '';
+async function ingestFiles(files) {
   if (!files.length || !currentGroupId || !currentUser) return;
-
   plusBtn.classList.add('busy');
   pendingImages = [];
   try {
     for (const f of files) {
-      if (/\.hei[cf]$/i.test(f.name) || f.type === 'image/heic' || f.type === 'image/heif') {
+      if (/\.hei[cf]$/i.test(f.name || '') || f.type === 'image/heic' || f.type === 'image/heif') {
         toast('Le format HEIC n’est pas lisible par le navigateur.');
         continue;
       }
@@ -1929,6 +1934,28 @@ imageInput.addEventListener('change', async () => {
   } finally {
     plusBtn.classList.remove('busy');
   }
+}
+
+imageInput.addEventListener('change', async () => {
+  const files = [...(imageInput.files || [])];
+  imageInput.value = '';
+  await ingestFiles(files);
+});
+
+messageInput.addEventListener('paste', (e) => {
+  const items = [...((e.clipboardData && e.clipboardData.items) || [])];
+  const files = items
+    .filter((it) => it.kind === 'file' && it.type.startsWith('image/'))
+    .map((it) => it.getAsFile())
+    .filter(Boolean);
+  if (!files.length) return;
+  e.preventDefault();
+  if (!currentGroupId || !currentUser) { toast('Ouvre un groupe pour coller une image.'); return; }
+  if (!canPostIn(currentGroup())) {
+    toast(isMutedIn(currentGroup()) ? 'Tu es muet dans ce groupe.' : 'Le chat est bloqué.');
+    return;
+  }
+  ingestFiles(files);
 });
 
 function openImagePreview() {
