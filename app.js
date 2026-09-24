@@ -74,6 +74,10 @@ let currentMembers = [];
 let unsubMember = null;
 let unsubMessages = null;
 let unsubMembers = null;
+const MSG_PAGE = 50;
+let msgLimit = MSG_PAGE;
+let msgHasMore = false;
+let loadingMore = false;
 
 const loginOverlay = document.getElementById('login-overlay');
 const loginBtn = document.getElementById('login-btn');
@@ -101,7 +105,6 @@ const joinInput = document.getElementById('join-input');
 
 const chatTitle = document.getElementById('chat-title');
 const chatTitleBtn = document.getElementById('chat-title-btn');
-const chatTitleEdit = document.getElementById('chat-title-edit');
 const deleteBtn = document.getElementById('delete-group');
 const adminBtn = document.getElementById('admin-btn');
 const pinnedBar = document.getElementById('pinned-bar');
@@ -154,6 +157,7 @@ const replyCancel = document.getElementById('reply-cancel');
 const mentionPop = document.getElementById('mention-pop');
 const cmdPop = document.getElementById('cmd-pop');
 const SLASH_COMMANDS = [
+  { label: '/r', insert: '/r ', icon: 'reply', desc: 'Répondre au dernier message qui te mentionne' },
   { label: '/group rename', insert: '/group rename ', icon: 'pencil', desc: 'Renommer le groupe (admin)' },
   { label: '/group visibility', insert: '/group visibility ', icon: 'globe', desc: 'Public ou privé (admin)' },
   { label: '/group mod', insert: '/group mod @', icon: 'shield', desc: 'Nommer / retirer un admin (propriétaire)' },
@@ -234,12 +238,6 @@ function canPostIn(group) {
   if (group.locked && !isAdminOf(group)) return false;
   return true;
 }
-function updateTitleEdit(group) {
-  const editable = isAdminOf(group);
-  chatTitleBtn.classList.toggle('editable', editable);
-  chatTitleEdit.hidden = !editable;
-  refreshIcons();
-}
 function updateComposerState() {
   const group = currentGroup();
   if (!group) return;
@@ -301,6 +299,20 @@ confirmOverlay.addEventListener('click', (e) => {
   if (e.target === confirmOverlay) { confirmOverlay.hidden = true; if (confirmResolver) confirmResolver(false); }
 });
 
+function infoModal(message) {
+  confirmText.textContent = message;
+  confirmNo.hidden = true;
+  confirmYes.textContent = 'OK';
+  confirmOverlay.hidden = false;
+  return new Promise((resolve) => {
+    confirmResolver = (v) => {
+      confirmNo.hidden = false;
+      confirmYes.textContent = 'Confirmer';
+      resolve(v);
+    };
+  });
+}
+
 function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (c) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
@@ -327,7 +339,7 @@ function renderMarkdown(raw) {
   const inlineCodes = [];
   let s = raw;
   s = s.replace(/```(?:[a-zA-Z0-9]+)?\n?([\s\S]*?)```/g, (m, c) => {
-    codeBlocks.push(c.replace(/\n$/, ''));
+    codeBlocks.push(c.replace(/^\n+/, '').replace(/\n+$/, ''));
     return `CB${codeBlocks.length - 1}`;
   });
   s = s.replace(/`([^`\n]+?)`/g, (m, c) => {
@@ -498,7 +510,6 @@ function onGroupsChanged() {
     chatTitle.textContent = group.name;
     adminBtn.hidden = false;
     deleteBtn.hidden = !isOwnerOf(group);
-    updateTitleEdit(group);
     updateComposerState();
     if (!adminOverlay.hidden) renderAdminPanel();
   }
@@ -578,7 +589,6 @@ async function selectGroup(id) {
   deleteBtn.hidden = !isOwnerOf(group);
   adminBtn.hidden = false;
   composer.hidden = false;
-  updateTitleEdit(group);
   clearReply();
   messageInput.value = localStorage.getItem('draft:' + id) || '';
   autoGrow();
@@ -587,19 +597,11 @@ async function selectGroup(id) {
 
   if (currentUser) Store.joinGroup(id, currentUser).catch(() => {});
 
-  if (unsubMessages) unsubMessages();
   messagesEl.innerHTML = '';
   knownMessageIds = new Set();
-  unsubMessages = Store.watchMessages(
-    id,
-    (messages) => {
-      maybeNotify(messages);
-      currentMessages = messages;
-      renderMessages();
-      renderPinned();
-    },
-    () => resetChat()
-  );
+  msgLimit = MSG_PAGE;
+  msgHasMore = false;
+  subscribeMessages(id);
 
   if (unsubMembers) unsubMembers();
   unsubMembers = Store.watchMembers(id, (members) => {
@@ -664,8 +666,6 @@ function resetChat() {
   clearReply();
   scrollDown.hidden = true;
   mentionPop.hidden = true;
-  chatTitleEdit.hidden = true;
-  chatTitleBtn.classList.remove('editable');
   if (unsubTyping) { unsubTyping(); unsubTyping = null; }
   if (currentGroupId && currentUser) Store.clearTyping(currentGroupId, currentUser.uid).catch(() => {});
   typingEl.hidden = true;
@@ -766,11 +766,13 @@ function buildBubble(msg) {
     const img = document.createElement('img');
     img.className = 'bubble-img';
     img.alt = 'image';
-    img.loading = 'lazy';
     img.decoding = 'async';
     img.referrerPolicy = 'no-referrer';
     if (msg.imgW && msg.imgH) {
+      img.width = msg.imgW;
+      img.height = msg.imgH;
       img.style.aspectRatio = `${msg.imgW} / ${msg.imgH}`;
+      img.loading = 'lazy';
     }
     let retried = false;
     img.addEventListener('error', () => {
@@ -999,7 +1001,14 @@ function startEdit(msg, bubble) {
   bar.appendChild(save);
   textEl.replaceWith(ta);
   ta.after(bar);
+  const grow = () => {
+    ta.style.height = 'auto';
+    ta.style.height = ta.scrollHeight + 'px';
+  };
+  ta.addEventListener('input', grow);
   ta.focus();
+  requestAnimationFrame(grow);
+  ta.setSelectionRange(ta.value.length, ta.value.length);
   cancel.addEventListener('click', () => renderMessages());
   save.addEventListener('click', async () => {
     const v = ta.value.trim();
@@ -1081,6 +1090,30 @@ function refreshIcons() {
 }
 
 let pendingRestore = null;
+function subscribeMessages(id) {
+  if (unsubMessages) { unsubMessages(); unsubMessages = null; }
+  unsubMessages = Store.watchMessages(
+    id,
+    msgLimit,
+    (messages, hasMore) => {
+      msgHasMore = hasMore;
+      loadingMore = false;
+      maybeNotify(messages);
+      currentMessages = messages;
+      renderMessages();
+      renderPinned();
+    },
+    () => resetChat()
+  );
+}
+
+function loadMoreMessages() {
+  if (loadingMore || !msgHasMore || !currentGroupId) return;
+  loadingMore = true;
+  msgLimit += MSG_PAGE;
+  subscribeMessages(currentGroupId);
+}
+
 function renderMessages() {
   const atBottom =
     messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 60;
@@ -1139,6 +1172,7 @@ messagesEl.addEventListener('scroll', () => {
   if (currentGroupId && !pendingRestore) {
     localStorage.setItem('scroll:' + currentGroupId, String(messagesEl.scrollTop));
   }
+  if (messagesEl.scrollTop < 120) loadMoreMessages();
   updateScrollDown();
 });
 scrollDown.addEventListener('click', () => {
@@ -1184,7 +1218,12 @@ function renderPinned() {
 function scrollToMessage(id) {
   const el = messagesEl.querySelector(`[data-id="${id}"]`);
   if (!el) return;
-  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const top =
+    el.getBoundingClientRect().top -
+    messagesEl.getBoundingClientRect().top +
+    messagesEl.scrollTop -
+    80;
+  messagesEl.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
   el.classList.add('flash');
   setTimeout(() => el.classList.remove('flash'), 1500);
 }
@@ -1794,6 +1833,19 @@ function resolveMention(token) {
 }
 
 async function handleCommand(text) {
+  if (/^\/r(?:\s|$)/i.test(text)) {
+    if (!currentUser) return true;
+    const last = [...currentMessages]
+      .reverse()
+      .find((msg) => !msg.system && msg.author !== currentUser.uid && (msg.mentions || []).includes(currentUser.uid));
+    if (!last) {
+      await infoModal("Tu n'as pas encore été mentionné dans ce groupe.");
+      return true;
+    }
+    setReply(last);
+    return true;
+  }
+
   const m = text.match(/^\/group\s+(\w+)\s*(.*)$/i);
   if (!m) return false;
   const group = currentGroup();
@@ -1894,15 +1946,6 @@ urlForm.addEventListener('submit', (e) => {
   if (!url) return;
   urlOverlay.hidden = true;
   sendMediaUrl(url);
-});
-
-chatTitleBtn.addEventListener('click', () => {
-  const group = currentGroup();
-  if (!group || !isAdminOf(group)) return;
-  adminOverlay.hidden = false;
-  renderAdminPanel();
-  renameInput.focus();
-  renameInput.select();
 });
 
 function autoGrow() {

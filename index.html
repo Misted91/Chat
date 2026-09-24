@@ -47,7 +47,9 @@
               <button type="button" data-v="none">Aucune</button>
             </div>
           </div>
-          <button class="logout" id="logout-btn" type="button" hidden>Déconnexion</button>
+          <button class="logout" id="logout-btn" type="button" hidden>
+            <i data-lucide="log-out" aria-hidden="true"></i><span>Déconnexion</span>
+          </button>
         </div>
       </header>
 
@@ -68,16 +70,18 @@
         <button class="icon-btn sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Afficher ou masquer la liste des groupes">
           <i data-lucide="panel-left" aria-hidden="true"></i>
         </button>
-        <button class="chat-title-btn" id="chat-title-btn" type="button">
+        <div class="chat-title-btn" id="chat-title-btn">
           <h2 id="chat-title">Sélectionne un groupe</h2>
-          <i data-lucide="pencil" aria-hidden="true" class="chat-title-edit" id="chat-title-edit" hidden></i>
-        </button>
+        </div>
         <div class="chat__actions">
-          <button class="btn-ghost" id="admin-btn" type="button" hidden aria-label="Membres et paramètres">
-            <i data-lucide="users" aria-hidden="true"></i>
-            <span>Membres</span>
+          <button class="btn-ghost" id="admin-btn" type="button" hidden aria-label="Paramètres du groupe">
+            <i data-lucide="settings" aria-hidden="true"></i>
+            <span>Paramètres</span>
           </button>
-          <button class="btn-danger" id="delete-group" type="button" hidden>Supprimer</button>
+          <button class="btn-danger" id="delete-group" type="button" hidden aria-label="Supprimer le groupe">
+            <i data-lucide="trash-2" aria-hidden="true"></i>
+            <span>Supprimer</span>
+          </button>
         </div>
       </header>
 

@@ -11,6 +11,8 @@ import {
   onSnapshot,
   query,
   where,
+  orderBy,
+  limitToLast,
   writeBatch,
   serverTimestamp,
   arrayUnion,
@@ -59,13 +61,17 @@ export const Store = {
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
 
-  watchMessages(groupId, callback, onError) {
-    return onSnapshot(
+  watchMessages(groupId, limitCount, callback, onError) {
+    const q = query(
       collection(db, 'groups', groupId, 'messages'),
+      orderBy('ts'),
+      limitToLast(limitCount)
+    );
+    return onSnapshot(
+      q,
       (snap) => {
-        const msgs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        msgs.sort((a, b) => (a.ts?.toMillis?.() || 0) - (b.ts?.toMillis?.() || 0));
-        callback(msgs);
+        const msgs = snap.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }));
+        callback(msgs, snap.size >= limitCount);
       },
       onError
     );

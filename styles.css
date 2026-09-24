@@ -107,6 +107,9 @@ html, body {
 }
 
 .logout {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--muted);
@@ -115,6 +118,7 @@ html, body {
   font-size: 12px;
   cursor: pointer;
 }
+.logout [data-lucide] { width: 14px; height: 14px; }
 .logout:hover { color: var(--text); border-color: var(--muted); }
 
 /* ---------- Écran de connexion ---------- */
@@ -436,6 +440,7 @@ html, body {
 
 .sidebar-toggle { margin-right: 4px; }
 .btn-ghost, .btn-danger, .admin-btn { display: inline-flex; align-items: center; gap: 6px; }
+.btn-ghost [data-lucide], .btn-danger [data-lucide] { width: 15px; height: 15px; }
 
 body.sidebar-hidden .sidebar { display: none; }
 body.sidebar-hidden .app { grid-template-columns: 1fr; }
@@ -589,6 +594,8 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   white-space: pre-wrap;
   margin: 4px 0;
 }
+.bubble .text > *:first-child { margin-top: 0; }
+.bubble .text > *:last-child { margin-bottom: 0; }
 .md-quote {
   display: block;
   border-left: 3px solid var(--muted);
@@ -1245,8 +1252,9 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
 }
 .emoji-picker.floating {
   margin: 0;
-  flex-wrap: wrap;
-  max-width: 220px;
+  flex-wrap: nowrap;
+  max-width: none;
+  width: max-content;
 }
 
 .reactions:empty { display: none; margin: 0; }
@@ -1325,10 +1333,7 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   border-radius: 8px;
   text-align: left;
 }
-.chat-title-btn.editable { cursor: pointer; }
-.chat-title-btn.editable:hover { background: var(--panel-2); }
 .chat-title-btn h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-title-edit { width: 15px; height: 15px; color: var(--muted); flex: none; }
 
 .modal-input {
   width: 100%;
@@ -1352,8 +1357,55 @@ select.modal-input { cursor: pointer; }
   margin-top: 12px;
 }
 .slow-label { font-size: 13px; color: var(--muted); flex: none; }
-.slow-row input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; }
+.slow-row input[type="range"] { flex: 1; }
 .slow-value { font-size: 13px; color: var(--text); min-width: 62px; text-align: right; }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+}
+input[type="range"]::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--panel);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .4);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--panel);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .4);
+}
+input[type="range"]:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--accent); outline-offset: 2px; }
+input[type="range"]:focus-visible::-moz-range-thumb { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .share-link-btn { width: 100%; justify-content: center; }
 .share-link-btn [data-lucide] { width: 15px; height: 15px; }
@@ -1366,7 +1418,7 @@ select.modal-input { cursor: pointer; }
   background: var(--panel-2);
 }
 
-.cmd-pop { max-height: 240px; }
+.cmd-pop { max-height: 240px; display: flex; flex-direction: column; gap: 4px; }
 .cmd-item {
   display: grid;
   grid-template-columns: 18px auto 1fr;
@@ -1402,4 +1454,6 @@ select.modal-input { cursor: pointer; }
   .sidebar { max-height: 42vh; }
   .cmd-item { grid-template-columns: 18px 1fr; }
   .cmd-item__desc { display: none; }
+  .chat__actions .btn-ghost span, .chat__actions .btn-danger span { display: none; }
+  .chat__actions .btn-ghost, .chat__actions .btn-danger { padding: 7px 9px; }
 }
