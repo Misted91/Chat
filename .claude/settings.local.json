@@ -1,1 +1,1 @@
-
+{ "permissions": { "allow": ["Bash(node purge-ghosts.mjs)"] } }
