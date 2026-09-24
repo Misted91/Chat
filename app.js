@@ -762,6 +762,7 @@ async function selectGroup(id) {
     if (!ok) return;
     editing = null;
   }
+  closeFloating();
   currentGroupId = id;
   groupUnread.delete(id);
   groupMention.delete(id);
@@ -1449,7 +1450,7 @@ function renderMessages() {
     messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 60;
   const prevTop = messagesEl.scrollTop;
   const prevHeight = messagesEl.scrollHeight;
-  closeFloating();
+  messagesEl.dataset.group = currentGroupId || '';
   messagesEl.innerHTML = '';
   let i = 0;
   while (i < currentMessages.length) {
@@ -1522,10 +1523,12 @@ messagesEl.addEventListener('touchstart', cancelRestore, { passive: true });
 messagesEl.addEventListener('keydown', cancelRestore);
 
 messagesEl.addEventListener('scroll', () => {
-  if (currentGroupId && !pendingRestore) {
+  if (currentGroupId && !pendingRestore
+      && messagesEl.dataset.group === currentGroupId
+      && restoreScrollFor !== currentGroupId) {
     localStorage.setItem('scroll:' + currentGroupId, String(messagesEl.scrollTop));
   }
-  if (messagesEl.scrollTop < 120) loadMoreMessages();
+  if (messagesEl.dataset.group === currentGroupId && messagesEl.scrollTop < 120) loadMoreMessages();
   updateScrollDown();
 });
 scrollDown.addEventListener('click', () => {
