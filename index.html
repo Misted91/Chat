@@ -99,10 +99,13 @@
 
       <div class="reply-bar" id="reply-bar" hidden>
         <i data-lucide="reply" aria-hidden="true"></i>
-        <div class="reply-bar__info">
+        <button class="reply-bar__info" id="reply-bar-jump" type="button">
           <span class="reply-bar__name" id="reply-bar-name"></span>
           <span class="reply-bar__text" id="reply-bar-text"></span>
-        </div>
+        </button>
+        <button class="icon-btn reply-mention" id="reply-mention" type="button" aria-pressed="true" aria-label="Mentionner l'auteur">
+          <i data-lucide="at-sign" aria-hidden="true"></i>
+        </button>
         <button class="icon-btn" id="reply-cancel" type="button" aria-label="Annuler la réponse">
           <i data-lucide="x" aria-hidden="true"></i>
         </button>

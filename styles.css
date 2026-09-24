@@ -324,9 +324,27 @@ html, body {
   border-top: 1px solid var(--border);
   background: var(--panel-2);
 }
-.reply-bar__info { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 12px; }
-.reply-bar__name { color: var(--accent); font-weight: 600; }
-.reply-bar__text { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reply-bar__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1px;
+  font-size: 12px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+}
+.reply-bar__info:hover .reply-bar__text { color: var(--text); }
+.reply-bar__name { color: var(--accent); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reply-bar__text { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+.reply-mention--off { opacity: .45; }
+.reply-mention--off [data-lucide] { text-decoration: line-through; }
 
 .reply-quote {
   display: block;
@@ -492,53 +510,26 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
 /* ---------- Barre des messages épinglés ---------- */
 .pinned-bar {
   border-bottom: 1px solid var(--border);
-  background: #14171e;
-  padding: 8px 16px;
+  background: var(--panel-2);
+  padding: 8px 20px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   max-height: 120px;
   overflow-y: auto;
 }
 .pinned-item {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--muted);
-}
-.pinned-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
   align-items: center;
-  gap: 6px;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-  padding: 0;
+  gap: 10px;
 }
-.pinned-text:hover { color: var(--text); }
-.pinned-text span {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-.pinned-text [data-lucide], .pinned-text .lucide { width: 14px; height: 14px; flex: none; }
+.pinned-item > [data-lucide], .pinned-item > .lucide { width: 16px; height: 16px; color: var(--muted); flex: none; }
 .pinned-unpin {
   border: none;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  font-size: 13px;
+  flex: none;
 }
 .pinned-unpin:hover { color: var(--danger); }
 
@@ -1209,6 +1200,8 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   margin-top: 4px;
 }
 .edit-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+.bubble.editing { width: 100%; max-width: 100%; }
+.edit-area { box-sizing: border-box; }
 
 .msg-edited { font-size: 11px; color: var(--muted); font-style: italic; }
 

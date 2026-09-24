@@ -78,6 +78,7 @@ const MSG_PAGE = 50;
 let msgLimit = MSG_PAGE;
 let msgHasMore = false;
 let loadingMore = false;
+let editing = null;
 
 const loginOverlay = document.getElementById('login-overlay');
 const loginBtn = document.getElementById('login-btn');
@@ -153,18 +154,29 @@ const scrollDown = document.getElementById('scroll-down');
 const replyBar = document.getElementById('reply-bar');
 const replyBarName = document.getElementById('reply-bar-name');
 const replyBarText = document.getElementById('reply-bar-text');
+const replyBarJump = document.getElementById('reply-bar-jump');
+const replyMentionBtn = document.getElementById('reply-mention');
 const replyCancel = document.getElementById('reply-cancel');
+let replyMention = true;
 const mentionPop = document.getElementById('mention-pop');
 const cmdPop = document.getElementById('cmd-pop');
 const SLASH_COMMANDS = [
-  { label: '/r', insert: '/r ', icon: 'reply', desc: 'Répondre au dernier message qui te mentionne' },
-  { label: '/group rename', insert: '/group rename ', icon: 'pencil', desc: 'Renommer le groupe (admin)' },
-  { label: '/group visibility', insert: '/group visibility ', icon: 'globe', desc: 'Public ou privé (admin)' },
-  { label: '/group mod', insert: '/group mod @', icon: 'shield', desc: 'Nommer / retirer un admin (propriétaire)' },
-  { label: '/group ban', insert: '/group ban @', icon: 'user-x', desc: 'Bannir un membre (admin)' },
-  { label: '/group timeout', insert: '/group timeout @', icon: 'mic-off', desc: 'Rendre muet / réactiver (admin)' },
-  { label: '/group clear', insert: '/group clear ', icon: 'trash-2', desc: 'Supprimer des messages (admin)' },
+  { label: '/r', insert: '/r ', icon: 'reply', desc: 'Répondre au dernier message qui te mentionne', perm: 'all' },
+  { label: '/group rename', insert: '/group rename ', icon: 'pencil', desc: 'Renommer le groupe (admin)', perm: 'admin' },
+  { label: '/group visibility', insert: '/group visibility ', icon: 'globe', desc: 'Public ou privé (admin)', perm: 'admin' },
+  { label: '/group mod', insert: '/group mod @', icon: 'shield', desc: 'Nommer / retirer un admin (propriétaire)', perm: 'owner' },
+  { label: '/group ban', insert: '/group ban @', icon: 'user-x', desc: 'Bannir un membre (admin)', perm: 'admin' },
+  { label: '/group timeout', insert: '/group timeout @', icon: 'mic-off', desc: 'Rendre muet / réactiver (admin)', perm: 'admin' },
+  { label: '/group clear', insert: '/group clear ', icon: 'trash-2', desc: 'Supprimer des messages (admin)', perm: 'admin' },
 ];
+function allowedCommands() {
+  const group = currentGroup();
+  const admin = isAdminOf(group);
+  const owner = isOwnerOf(group);
+  return SLASH_COMMANDS.filter((c) =>
+    c.perm === 'all' || (c.perm === 'admin' && admin) || (c.perm === 'owner' && owner)
+  );
+}
 const groupNotifToggle = document.getElementById('group-notif-toggle');
 const moderationBlock = document.getElementById('moderation-block');
 const lockToggle = document.getElementById('lock-toggle');
@@ -981,12 +993,13 @@ function highlightMentions(html) {
   return html;
 }
 
-function startEdit(msg, bubble) {
+function startEdit(msg, bubble, opts = {}) {
   const textEl = bubble.querySelector('.text');
   if (!textEl) return;
+  bubble.classList.add('editing');
   const ta = document.createElement('textarea');
   ta.className = 'edit-area';
-  ta.value = msg.text;
+  ta.value = opts.draft != null ? opts.draft : msg.text;
   const bar = document.createElement('div');
   bar.className = 'edit-actions';
   const cancel = document.createElement('button');
@@ -1005,14 +1018,30 @@ function startEdit(msg, bubble) {
     ta.style.height = 'auto';
     ta.style.height = ta.scrollHeight + 'px';
   };
-  ta.addEventListener('input', grow);
-  ta.focus();
-  requestAnimationFrame(grow);
-  ta.setSelectionRange(ta.value.length, ta.value.length);
-  cancel.addEventListener('click', () => renderMessages());
+  const syncState = () => {
+    editing = { id: msg.id, draft: ta.value, start: ta.selectionStart, end: ta.selectionEnd };
+  };
+  editing = { id: msg.id, draft: ta.value, start: ta.value.length, end: ta.value.length };
+  ta.addEventListener('input', () => { grow(); syncState(); });
+  ta.addEventListener('keyup', syncState);
+  ta.addEventListener('click', syncState);
+  grow();
+  if (opts.silent) {
+    const caret = opts.start != null ? opts.start : ta.value.length;
+    const caretEnd = opts.end != null ? opts.end : caret;
+    ta.setSelectionRange(caret, caretEnd);
+    ta.focus({ preventScroll: true });
+  } else {
+    ta.focus();
+    requestAnimationFrame(grow);
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+  const close = () => { editing = null; renderMessages(); };
+  cancel.addEventListener('click', close);
   save.addEventListener('click', async () => {
     const v = ta.value.trim();
     if (!v) { toast('Le message ne peut pas être vide.'); return; }
+    editing = null;
     try {
       await Store.editMessage(currentGroupId, msg.id, v);
     } catch (err) {
@@ -1123,6 +1152,15 @@ function renderMessages() {
   messagesEl.innerHTML = '';
   currentMessages.forEach((msg) => messagesEl.appendChild(buildBubble(msg)));
   refreshIcons();
+  if (editing) {
+    const msg = currentMessages.find((m) => m.id === editing.id);
+    const bubble = messagesEl.querySelector(`.bubble[data-id="${editing.id}"]`);
+    if (msg && bubble) {
+      startEdit(msg, bubble, { draft: editing.draft, start: editing.start, end: editing.end, silent: true });
+    } else {
+      editing = null;
+    }
+  }
   if (restoreScrollFor === currentGroupId) {
     const raw = localStorage.getItem('scroll:' + currentGroupId);
     const saved = raw === null ? null : Number(raw);
@@ -1191,17 +1229,27 @@ function renderPinned() {
   pinned.forEach((msg) => {
     const item = document.createElement('div');
     item.className = 'pinned-item';
+    const icon = document.createElement('i');
+    icon.setAttribute('data-lucide', 'pin');
+    icon.setAttribute('aria-hidden', 'true');
     const label = document.createElement('button');
-    label.className = 'pinned-text';
-    label.innerHTML =
-      '<i data-lucide="pin" aria-hidden="true"></i>' +
-      `<span></span>`;
-    label.querySelector('span').textContent = `${msg.authorName} : ${msg.text || 'image'}`;
+    label.type = 'button';
+    label.className = 'reply-bar__info pinned-jump';
+    const name = document.createElement('span');
+    name.className = 'reply-bar__name';
+    name.textContent = msg.authorName || 'Anonyme';
+    const text = document.createElement('span');
+    text.className = 'reply-bar__text';
+    text.textContent = msg.text || (msg.image ? 'Image' : msg.audio ? 'Audio' : '');
+    label.appendChild(name);
+    label.appendChild(text);
     label.addEventListener('click', () => scrollToMessage(msg.id));
+    item.appendChild(icon);
     item.appendChild(label);
     if (admin) {
       const unpin = document.createElement('button');
-      unpin.className = 'pinned-unpin';
+      unpin.type = 'button';
+      unpin.className = 'pinned-unpin icon-btn';
       unpin.setAttribute('aria-label', 'Désépingler');
       unpin.innerHTML = '<i data-lucide="x" aria-hidden="true"></i>';
       unpin.title = 'Désépingler';
@@ -1720,7 +1768,7 @@ previewSend.addEventListener('click', async () => {
   const text = messageInput.value.trim();
   if (findProfanity(text)) { toast('Message bloqué : langage inapproprié.', 'error'); return; }
   const reply = replyingTo;
-  const mentions = computeMentions(text);
+  const mentions = [...new Set([...computeMentions(text), ...replyMentions()])];
   closePreview();
   try {
     for (let i = 0; i < imgs.length; i++) {
@@ -1755,7 +1803,7 @@ function sendMediaUrl(url) {
     image: clean,
     user: currentUser,
     reply: replyingTo,
-    mentions: computeMentions(messageInput.value.trim()),
+    mentions: [...new Set([...computeMentions(messageInput.value.trim()), ...replyMentions()])],
   })
     .then(() => { messageInput.value = ''; clearReply(); messagesEl.scrollTop = messagesEl.scrollHeight; })
     .catch((err) => toast('Envoi impossible : ' + err.message));
@@ -1807,7 +1855,7 @@ composer.addEventListener('submit', async (e) => {
   }
 
   const reply = replyingTo;
-  const mentions = computeMentions(text);
+  const mentions = [...new Set([...computeMentions(text), ...replyMentions()])];
   messageInput.value = '';
   localStorage.removeItem('draft:' + currentGroupId);
   autoGrow();
@@ -1971,23 +2019,53 @@ messageInput.addEventListener('keydown', (e) => {
   }
 });
 
+function updateReplyMentionBtn() {
+  replyMentionBtn.classList.toggle('reply-mention--off', !replyMention);
+  replyMentionBtn.setAttribute('aria-pressed', String(replyMention));
+  replyMentionBtn.setAttribute(
+    'aria-label',
+    replyMention ? "Ne pas mentionner l'auteur" : "Mentionner l'auteur"
+  );
+}
 function setReply(msg) {
+  const wasBottom =
+    messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 60;
   replyingTo = {
     id: msg.id,
+    uid: msg.author,
     name: msg.authorName || 'Anonyme',
-    text: (msg.text || (msg.image ? 'Image' : '')).slice(0, 140),
+    text: (msg.text || (msg.image ? 'Image' : msg.audio ? 'Audio' : '')).slice(0, 140),
   };
+  replyMention = true;
+  updateReplyMentionBtn();
   replyBarName.textContent = replyingTo.name;
   replyBarText.textContent = replyingTo.text;
   replyBar.hidden = false;
   refreshIcons();
+  if (wasBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
   messageInput.focus();
 }
 function clearReply() {
+  const wasBottom =
+    messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 60;
+  const wasOpen = !replyBar.hidden;
   replyingTo = null;
   replyBar.hidden = true;
+  if (wasOpen && wasBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+function replyMentions() {
+  return replyingTo && replyMention && replyingTo.uid && replyingTo.uid !== (currentUser && currentUser.uid)
+    ? [replyingTo.uid]
+    : [];
 }
 replyCancel.addEventListener('click', clearReply);
+replyMentionBtn.addEventListener('click', () => {
+  replyMention = !replyMention;
+  updateReplyMentionBtn();
+});
+replyBarJump.addEventListener('click', () => {
+  if (replyingTo) scrollToMessage(replyingTo.id);
+});
 
 function computeMentions(text) {
   const ids = [];
@@ -2059,7 +2137,7 @@ messageInput.addEventListener('input', () => {
   if (!m) { cmdPop.hidden = true; return; }
   mentionPop.hidden = true;
   const q = ('/' + m[1]).toLowerCase();
-  renderCmdPop(SLASH_COMMANDS.filter((c) => c.label.toLowerCase().startsWith(q) || ('/group').startsWith(q)));
+  renderCmdPop(allowedCommands().filter((c) => c.label.toLowerCase().startsWith(q) || ('/group').startsWith(q)));
 });
 document.addEventListener('click', (e) => {
   if (!cmdPop.hidden && !e.target.closest('#cmd-pop') && e.target !== messageInput) cmdPop.hidden = true;
