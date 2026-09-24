@@ -183,6 +183,7 @@ const moderationBlock = document.getElementById('moderation-block');
 const lockToggle = document.getElementById('lock-toggle');
 const slowRange = document.getElementById('slow-range');
 const slowValue = document.getElementById('slow-value');
+const slowApply = document.getElementById('slow-apply');
 const slowHint = document.getElementById('slow-hint');
 const shareLinkBtn = document.getElementById('share-link');
 const floatingMenu = document.getElementById('floating-menu');
@@ -502,6 +503,7 @@ function startGroupsListeners() {
 function stopGroupsListeners() {
   if (unsubMember) { unsubMember(); unsubMember = null; }
   if (unsubPublic) { unsubPublic(); unsubPublic = null; }
+  stopGroupWatchers();
   memberGroups = [];
   publicGroups = [];
   extraGroups.clear();
@@ -509,6 +511,7 @@ function stopGroupsListeners() {
 
 function onGroupsChanged() {
   mergeGroups();
+  syncGroupWatchers();
   renderGroups();
 
   const group = currentGroup();
@@ -596,6 +599,14 @@ function renderGroups() {
       li.appendChild(tag);
     }
 
+    if (groupUnread.has(group.id) && group.id !== currentGroupId) {
+      li.classList.add('has-unread');
+      const dot = document.createElement('span');
+      dot.className = 'group-unread';
+      dot.setAttribute('aria-label', 'Nouveaux messages');
+      li.appendChild(dot);
+    }
+
     li.addEventListener('click', () => selectGroup(group.id));
     li.addEventListener('contextmenu', (e) => {
       e.preventDefault();
@@ -610,6 +621,7 @@ function renderGroups() {
 
 async function selectGroup(id) {
   currentGroupId = id;
+  groupUnread.delete(id);
   let group = currentGroup();
 
   if (!group) {
@@ -661,31 +673,76 @@ function groupNotifMode(id) {
   const v = localStorage.getItem('gnotif:' + id);
   if (v === '0') return 'none';
   if (v === 'all' || v === 'mentions' || v === 'none') return v;
-  return notifGlobal;
+  return 'none';
 }
 
-function shouldNotify(m) {
-  const mode = groupNotifMode(currentGroupId);
+function shouldNotifyFor(id, m) {
+  if (!currentUser) return false;
+  const mode = groupNotifMode(id);
   if (mode === 'none' || notifGlobal === 'none') return false;
   if (mode === 'mentions' || notifGlobal === 'mentions')
     return (m.mentions || []).includes(currentUser.uid);
   return true;
 }
 
-function maybeNotify(messages) {
-  const first = knownMessageIds.size === 0;
-  messages.forEach((m) => {
-    const isNew = !knownMessageIds.has(m.id);
-    knownMessageIds.add(m.id);
-    if (first || !isNew) return;
-    if (m.system || !currentUser || m.author === currentUser.uid) return;
-    if (!shouldNotify(m)) return;
-    if (document.hidden && window.Notification && Notification.permission === 'granted') {
-      const body = m.text || (m.image ? 'Image' : m.audio ? 'Audio' : '');
-      new Notification(m.authorName || 'Nouveau message', { body });
+const groupWatchers = new Map();
+const groupPrimed = new Set();
+const groupUnread = new Set();
+
+function syncGroupWatchers() {
+  if (!currentUser) return;
+  const mine = groups.filter((g) => (g.memberUids || []).includes(currentUser.uid));
+  const ids = new Set(mine.map((g) => g.id));
+  for (const [id, unsub] of [...groupWatchers]) {
+    if (!ids.has(id)) {
+      unsub();
+      groupWatchers.delete(id);
+      groupPrimed.delete(id);
+      groupUnread.delete(id);
     }
+  }
+  mine.forEach((g) => {
+    if (groupWatchers.has(g.id)) return;
+    const unsub = Store.watchMessages(g.id, 1, (msgs) => onGroupLatest(g.id, msgs), () => {});
+    groupWatchers.set(g.id, unsub);
   });
 }
+
+function stopGroupWatchers() {
+  for (const [, unsub] of groupWatchers) unsub();
+  groupWatchers.clear();
+  groupPrimed.clear();
+  groupUnread.clear();
+}
+
+function onGroupLatest(id, msgs) {
+  const primed = groupPrimed.has(id);
+  groupPrimed.add(id);
+  const m = msgs[msgs.length - 1];
+  if (!m || !primed) return;
+  if (!currentUser || m.author === currentUser.uid || m.system) return;
+  if (id === currentGroupId && !document.hidden) return;
+  groupUnread.add(id);
+  renderGroups();
+  if (!shouldNotifyFor(id, m)) return;
+  const body = m.text || (m.image ? 'Image' : m.audio ? 'Audio' : '');
+  if (document.hidden) {
+    if (window.Notification && Notification.permission === 'granted') {
+      new Notification(m.authorName || 'Nouveau message', { body });
+    }
+  } else {
+    const g = groups.find((x) => x.id === id);
+    toast(`${g ? g.name : 'Groupe'} · ${m.authorName || 'Nouveau message'}`);
+  }
+}
+
+function clearUnread(id) {
+  if (groupUnread.delete(id)) renderGroups();
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && currentGroupId) clearUnread(currentGroupId);
+});
 
 function renderTyping(list) {
   const now = Date.now();
@@ -1040,7 +1097,9 @@ function highlightMentions(html) {
 function startEdit(msg, bubble, opts = {}) {
   const textEl = bubble.querySelector('.text');
   if (!textEl) return;
+  const displayedWidth = bubble.getBoundingClientRect().width;
   bubble.classList.add('editing');
+  bubble.style.width = displayedWidth + 'px';
   const ta = document.createElement('textarea');
   ta.className = 'edit-area';
   ta.value = opts.draft != null ? opts.draft : msg.text;
@@ -1171,7 +1230,6 @@ function subscribeMessages(id) {
     (messages, hasMore) => {
       msgHasMore = hasMore;
       loadingMore = false;
-      maybeNotify(messages);
       currentMessages = messages;
       renderMessages();
       renderPinned();
@@ -1398,9 +1456,22 @@ lockToggle.addEventListener('change', () => {
 
 function slowLabel(s) { return s > 0 ? `${s} s` : 'Désactivé'; }
 slowRange.addEventListener('input', () => { slowValue.textContent = slowLabel(Number(slowRange.value)); });
-slowRange.addEventListener('change', () => {
-  if (!currentGroupId) return;
-  Store.setSlowMode(currentGroupId, Number(slowRange.value)).catch((err) => toast('Action impossible : ' + err.message));
+slowApply.addEventListener('click', async () => {
+  if (!currentGroupId || !currentUser) return;
+  const group = currentGroup();
+  const seconds = Number(slowRange.value);
+  if (group && (group.slowMode || 0) === seconds) { toast('Mode lent déjà à cette valeur.'); return; }
+  try {
+    await Store.setSlowMode(currentGroupId, seconds);
+    await Store.addSystemMessage(
+      currentGroupId,
+      seconds > 0 ? `Mode lent réglé sur ${seconds} s` : 'Mode lent désactivé',
+      currentUser
+    ).catch(() => {});
+    toast('Mode lent mis à jour.');
+  } catch (err) {
+    toast('Action impossible : ' + err.message);
+  }
 });
 
 groupNotifToggle.querySelectorAll('button').forEach((b) => {
@@ -1411,8 +1482,7 @@ groupNotifToggle.querySelectorAll('button').forEach((b) => {
   });
 });
 function updateGroupNotifToggle(id) {
-  const stored = localStorage.getItem('gnotif:' + id);
-  const mode = stored === '0' ? 'none' : (stored || '');
+  const mode = groupNotifMode(id);
   groupNotifToggle.querySelectorAll('button').forEach((b) =>
     b.classList.toggle('active', b.dataset.v === mode)
   );
