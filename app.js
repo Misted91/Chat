@@ -2314,7 +2314,7 @@ function updateTimePreview() {
 function openTimeModal() {
   const now = new Date();
   timeDate.value = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
-  timeTime.value = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+  timeTime.value = `${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`;
   timeFormat.value = 'R';
   updateTimePreview();
   timeOverlay.hidden = false;
