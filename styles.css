@@ -407,7 +407,7 @@ html, body {
   opacity: 0;
   transition: opacity .12s;
 }
-.msg-row:hover .msg-menu-btn { opacity: 1; }
+.bubble:hover .msg-menu-btn { opacity: 1; }
 .msg-menu-btn:hover { background: rgba(0, 0, 0, .25); color: var(--text); }
 .msg-menu {
   position: absolute;
@@ -460,9 +460,11 @@ html, body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  position: relative;
 }
 .chat__head h2 { margin: 0; font-size: 18px; flex: 1; }
 .chat__actions { display: flex; gap: 8px; }
+.chat-more { display: none; }
 
 .sidebar-toggle { margin-right: 4px; }
 .btn-ghost, .btn-danger, .admin-btn { display: inline-flex; align-items: center; gap: 6px; }
@@ -549,7 +551,7 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 30px;
 }
 
 .msg-row {
@@ -740,11 +742,11 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   color: white;
 }
 .msg-avatar.spacer { background: transparent; }
-.msg-row.grp-cont { margin-top: -6px; }
+.msg-row.grp-cont { margin-top: -25px; }
 .msg-row:not(.me) .bubble.grp-top { border-top-left-radius: 5px; }
-.msg-row:not(.me) .bubble.grp-bot { border-bottom-left-radius: 5px; }
+.msg-row:not(.me) .bubble.grp-bot { border-bottom-left-radius: 5px; border-top-left-radius: 5px; }
 .msg-row.me .bubble.grp-top { border-top-right-radius: 5px; }
-.msg-row.me .bubble.grp-bot { border-bottom-right-radius: 5px; }
+.msg-row.me .bubble.grp-bot { border-bottom-right-radius: 5px; border-top-right-radius: 5px; }
 
 .chat-empty {
   align-self: center;
@@ -1646,6 +1648,22 @@ input[type="range"]:focus-visible::-moz-range-thumb { outline: 2px solid var(--a
   .sidebar { max-height: 42vh; }
   .cmd-item { grid-template-columns: 18px 1fr; }
   .cmd-item__desc { display: none; }
-  .chat__actions .btn-ghost span, .chat__actions .btn-danger span { display: none; }
-  .chat__actions .btn-ghost, .chat__actions .btn-danger { padding: 7px 9px; }
+  .chat-more:not([hidden]) { display: inline-flex; }
+  .chat__actions {
+    position: absolute;
+    top: calc(100% - 1px);
+    right: 8px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    padding: 6px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+    z-index: 30;
+    display: none;
+  }
+  .chat__head.menu-open .chat__actions { display: flex; }
+  .chat__actions .btn-ghost, .chat__actions .btn-danger { justify-content: flex-start; }
 }

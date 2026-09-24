@@ -107,6 +107,8 @@ const joinInput = document.getElementById('join-input');
 
 const chatTitle = document.getElementById('chat-title');
 const chatTitleBtn = document.getElementById('chat-title-btn');
+const chatHead = document.getElementById('chat-head');
+const chatMore = document.getElementById('chat-more');
 const deleteBtn = document.getElementById('delete-group');
 const adminBtn = document.getElementById('admin-btn');
 const pinnedBar = document.getElementById('pinned-bar');
@@ -560,6 +562,18 @@ sidebarToggle.addEventListener('click', () => {
   document.body.classList.toggle('sidebar-hidden');
 });
 
+chatMore.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const open = chatHead.classList.toggle('menu-open');
+  chatMore.setAttribute('aria-expanded', String(open));
+});
+document.addEventListener('click', () => {
+  if (chatHead.classList.contains('menu-open')) {
+    chatHead.classList.remove('menu-open');
+    chatMore.setAttribute('aria-expanded', 'false');
+  }
+});
+
 watchAuth((user) => {
   currentUser = user;
   if (user) {
@@ -660,6 +674,7 @@ function onGroupsChanged() {
     }
     chatTitle.textContent = group.name;
     adminBtn.hidden = false;
+    chatMore.hidden = false;
     deleteBtn.hidden = !isOwnerOf(group);
     updateComposerState();
     if (!adminOverlay.hidden) renderAdminPanel();
@@ -788,6 +803,7 @@ async function selectGroup(id) {
   chatTitle.textContent = group.name;
   deleteBtn.hidden = !isOwnerOf(group);
   adminBtn.hidden = false;
+  chatMore.hidden = false;
   composer.hidden = false;
   clearReply();
   messageInput.value = localStorage.getItem('draft:' + id) || '';
@@ -933,6 +949,8 @@ function resetChat() {
   chatTitle.textContent = 'Sélectionne un groupe';
   deleteBtn.hidden = true;
   adminBtn.hidden = true;
+  chatMore.hidden = true;
+  chatHead.classList.remove('menu-open');
   composer.hidden = true;
   messagesEl.innerHTML = '';
   pinnedBar.hidden = true;
