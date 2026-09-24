@@ -726,6 +726,38 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   background: var(--bubble-me);
   color: white;
 }
+.msg-avatar.spacer { background: transparent; }
+.msg-row.grp-cont { margin-top: -6px; }
+.msg-row:not(.me) .bubble.grp-top { border-top-left-radius: 5px; }
+.msg-row:not(.me) .bubble.grp-bot { border-bottom-left-radius: 5px; }
+.msg-row.me .bubble.grp-top { border-top-right-radius: 5px; }
+.msg-row.me .bubble.grp-bot { border-bottom-right-radius: 5px; }
+
+.chat-empty {
+  align-self: center;
+  max-width: 460px;
+  margin: 24px auto;
+  padding: 24px 20px;
+  text-align: center;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.chat-empty [data-lucide] { width: 30px; height: 30px; color: var(--accent); }
+.chat-empty h3 { margin: 4px 0 0; color: var(--text); font-size: 17px; }
+.chat-empty p { margin: 0; font-size: 14px; }
+.chat-empty__topic {
+  margin-top: 8px;
+  padding: 12px 16px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  font-size: 15px;
+  font-style: italic;
+}
 .bubble .meta {
   display: block;
   font-size: 11px;

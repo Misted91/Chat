@@ -941,7 +941,49 @@ function resetChat() {
   renderGroups();
 }
 
-function buildBubble(msg) {
+const ICEBREAKERS = [
+  'Si tu pouvais dîner avec n’importe qui, vivant ou non, tu choisirais qui ?',
+  'Quel est le super-pouvoir le plus inutile que tu aimerais avoir ?',
+  'Pizza à l’ananas : crime contre l’humanité ou chef-d’œuvre incompris ?',
+  'Quel film pourrais-tu revoir 100 fois sans t’en lasser ?',
+  'Si les animaux pouvaient parler, lequel serait le plus insupportable ?',
+  'Team montagne ou team plage pour les vacances ?',
+  'Tu gagnes au loto demain : c’est quoi la première folie ?',
+  'Quel talent caché aimerais-tu révéler au groupe ?',
+  'Si tu devais vivre dans un jeu vidéo, lequel choisirais-tu ?',
+  'Quelle chanson te met de bonne humeur à coup sûr ?',
+  'Quelle est ta théorie bizarre mais complètement assumée ?',
+  'Voyage dans le temps : tu files dans le passé ou dans le futur ?',
+  'Quel est ton snack de minuit préféré ?',
+  'C’est quoi le meilleur plat que tu saches cuisiner ?',
+  'Une appli que tu ouvres beaucoup trop souvent ?',
+];
+
+function buildIcebreaker() {
+  const box = document.createElement('div');
+  box.className = 'chat-empty';
+  let seed = 0;
+  const key = currentGroupId || '';
+  for (let i = 0; i < key.length; i++) seed = (seed * 31 + key.charCodeAt(i)) >>> 0;
+  const topic = ICEBREAKERS[seed % ICEBREAKERS.length];
+  const icon = document.createElement('i');
+  icon.setAttribute('data-lucide', 'sparkles');
+  icon.setAttribute('aria-hidden', 'true');
+  const h = document.createElement('h3');
+  h.textContent = 'C’est le tout début de cette conversation';
+  const p = document.createElement('p');
+  p.textContent = 'Lancez-vous ! Une idée pour briser la glace :';
+  const t = document.createElement('div');
+  t.className = 'chat-empty__topic';
+  t.textContent = topic;
+  box.appendChild(icon);
+  box.appendChild(h);
+  box.appendChild(p);
+  box.appendChild(t);
+  return box;
+}
+
+function buildBubble(msg, pos = {}) {
   const group = currentGroup();
 
   if (msg.system) {
@@ -953,43 +995,51 @@ function buildBubble(msg) {
   }
 
   const isMe = currentUser && msg.author === currentUser.uid;
+  const first = pos.first !== false;
+  const last = pos.last !== false;
+  const showId = first || last;
 
   const row = document.createElement('div');
-  row.className = 'msg-row' + (isMe ? ' me' : '');
+  row.className = 'msg-row' + (isMe ? ' me' : '') + (first ? '' : ' grp-cont');
   row.dataset.id = msg.id;
 
   const avatar = document.createElement('div');
-  avatar.className = 'msg-avatar';
-  if (msg.authorPhoto) {
-    const im = document.createElement('img');
-    im.width = 30;
-    im.height = 30;
-    im.loading = 'lazy';
-    im.decoding = 'async';
-    im.referrerPolicy = 'no-referrer';
-    im.src = msg.authorPhoto;
-    im.alt = '';
-    avatar.appendChild(im);
-  } else {
-    avatar.textContent = initials(msg.authorName);
+  avatar.className = 'msg-avatar' + (showId ? '' : ' spacer');
+  if (showId) {
+    if (msg.authorPhoto) {
+      const im = document.createElement('img');
+      im.width = 30;
+      im.height = 30;
+      im.loading = 'lazy';
+      im.decoding = 'async';
+      im.referrerPolicy = 'no-referrer';
+      im.src = msg.authorPhoto;
+      im.alt = '';
+      avatar.appendChild(im);
+    } else {
+      avatar.textContent = initials(msg.authorName);
+    }
   }
   row.appendChild(avatar);
 
   const bubble = document.createElement('div');
-  bubble.className = 'bubble' + (isMe ? ' me' : '') + (msg.pinned ? ' pinned' : '');
+  bubble.className = 'bubble' + (isMe ? ' me' : '') + (msg.pinned ? ' pinned' : '')
+    + (first ? '' : ' grp-top') + (last ? '' : ' grp-bot');
   bubble.dataset.id = msg.id;
 
   const meta = document.createElement('span');
   meta.className = 'meta';
   const date = msg.ts && msg.ts.toDate ? msg.ts.toDate() : new Date();
-  const who = document.createElement('span');
-  who.textContent = `${msg.authorName || 'Anonyme'} · `;
   const timeEl = document.createElement('span');
   timeEl.className = 'msg-time';
   timeEl.dataset.ms = date.getTime();
   timeEl.title = date.toLocaleString('fr-FR');
   timeEl.textContent = relativeTime(date);
-  meta.appendChild(who);
+  if (showId) {
+    const who = document.createElement('span');
+    who.textContent = `${msg.authorName || 'Anonyme'} · `;
+    meta.appendChild(who);
+  }
   meta.appendChild(timeEl);
   if (msg.edited) {
     const ed = document.createElement('span');
@@ -1238,7 +1288,8 @@ function closeFloating() {
 function closeAllMenus() { closeFloating(); }
 document.addEventListener('click', closeFloating);
 window.addEventListener('resize', closeFloating);
-messagesEl.addEventListener('scroll', closeFloating);
+messagesEl.addEventListener('wheel', closeFloating, { passive: true });
+messagesEl.addEventListener('touchmove', closeFloating, { passive: true });
 messagesEl.addEventListener('click', (e) => {
   const sp = e.target.closest('.md-spoiler');
   if (sp) sp.classList.add('revealed');
@@ -1452,6 +1503,9 @@ function renderMessages() {
   const prevHeight = messagesEl.scrollHeight;
   messagesEl.dataset.group = currentGroupId || '';
   messagesEl.innerHTML = '';
+  if (!currentMessages.some((m) => !m.system)) {
+    messagesEl.appendChild(buildIcebreaker());
+  }
   let i = 0;
   while (i < currentMessages.length) {
     if (currentMessages[i].system) {
@@ -1461,7 +1515,11 @@ function renderMessages() {
       appendSystemRun(run);
       i = j;
     } else {
-      messagesEl.appendChild(buildBubble(currentMessages[i]));
+      const prev = currentMessages[i - 1];
+      const next = currentMessages[i + 1];
+      const first = !prev || prev.system || prev.author !== currentMessages[i].author;
+      const last = !next || next.system || next.author !== currentMessages[i].author;
+      messagesEl.appendChild(buildBubble(currentMessages[i], { first, last }));
       i++;
     }
   }
