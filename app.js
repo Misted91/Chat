@@ -158,7 +158,9 @@ const replyBarText = document.getElementById('reply-bar-text');
 const replyBarJump = document.getElementById('reply-bar-jump');
 const replyMentionBtn = document.getElementById('reply-mention');
 const replyCancel = document.getElementById('reply-cancel');
+const mentionToggleBtn = document.getElementById('mention-toggle');
 let replyMention = true;
+let mentionEnabled = true;
 const mentionPop = document.getElementById('mention-pop');
 const cmdPop = document.getElementById('cmd-pop');
 const SLASH_COMMANDS = [
@@ -351,14 +353,16 @@ function formatDiscordTs(sec, fmt) {
 function renderMarkdown(raw) {
   const codeBlocks = [];
   const inlineCodes = [];
+  const links = [];
+  const S = '';
   let s = raw;
-  s = s.replace(/```(?:[a-zA-Z0-9]+)?\n?([\s\S]*?)```/g, (m, c) => {
-    codeBlocks.push(c.replace(/^\n+/, '').replace(/\n+$/, ''));
-    return `CB${codeBlocks.length - 1}`;
+  s = s.replace(/```([a-zA-Z0-9+#-]+)?\n?([\s\S]*?)```/g, (m, lang, c) => {
+    codeBlocks.push({ code: c.replace(/^\n+/, '').replace(/\n+$/, ''), lang: (lang || '').toLowerCase() });
+    return `${S}CB${codeBlocks.length - 1}${S}`;
   });
   s = s.replace(/`([^`\n]+?)`/g, (m, c) => {
     inlineCodes.push(c);
-    return `IC${inlineCodes.length - 1}`;
+    return `${S}IC${inlineCodes.length - 1}${S}`;
   });
   s = escapeHtml(s);
   s = s.replace(/^(#{1,6})\s+(.*)$/gm, (m, h, t) => `<span class="md-h md-h${h.length}">${t}</span>`);
@@ -367,6 +371,14 @@ function renderMarkdown(raw) {
   s = s.replace(/^&gt; ?(.*)$/gm, '<span class="md-quote">$1</span>');
   s = s.replace(/^(?:\*|-)\s+(.*)$/gm, '<span class="md-li">• $1</span>');
   s = s.replace(/^(\d+)\.\s+(.*)$/gm, '<span class="md-li">$1. $2</span>');
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (m, txt, url) => {
+    links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer">${txt}</a>`);
+    return `${S}L${links.length - 1}${S}`;
+  });
+  s = s.replace(new RegExp('(^|[^' + S + '])(https?:\\/\\/[^\\s<]+)', 'g'), (m, pre, url) => {
+    links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
+    return pre + `${S}L${links.length - 1}${S}`;
+  });
   s = s.replace(/\|\|([^\n]+?)\|\|/g, '<span class="md-spoiler">$1</span>');
   s = s.replace(/\*\*\*([^*]+?)\*\*\*/g, '<strong><em>$1</em></strong>');
   s = s.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
@@ -374,24 +386,31 @@ function renderMarkdown(raw) {
   s = s.replace(/~~([^~]+?)~~/g, '<del>$1</del>');
   s = s.replace(/__([^_\n]+?)__/g, '<u>$1</u>');
   s = s.replace(/_([^_\n]+?)_/g, '<em>$1</em>');
-  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-  s = s.replace(/(^|[^"'=>])(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>');
   s = s.replace(/&lt;t:(\d+)(?::([tTdDfFR]))?&gt;/g, (m, sec, fmt) => formatDiscordTs(Number(sec), fmt || 'f'));
+  s = s.replace(new RegExp('\\n*(' + S + 'CB\\d+' + S + ')\\n*', 'g'), '$1');
   s = s.replace(/\n/g, '<br>');
-  s = s.replace(/IC(\d+)/g, (m, i) => `<code class="md-inline">${escapeHtml(inlineCodes[+i])}</code>`);
-  s = s.replace(/CB(\d+)/g, (m, i) => `<pre class="md-code">${escapeHtml(codeBlocks[+i])}</pre>`);
+  s = s.replace(new RegExp(S + 'L(\\d+)' + S, 'g'), (m, i) => links[+i]);
+  s = s.replace(new RegExp(S + 'IC(\\d+)' + S, 'g'), (m, i) => `<code class="md-inline">${escapeHtml(inlineCodes[+i])}</code>`);
+  s = s.replace(new RegExp(S + 'CB(\\d+)' + S, 'g'), (m, i) => {
+    const b = codeBlocks[+i];
+    const lang = b.lang ? escapeHtml(b.lang) : 'code';
+    return `<div class="code-wrap"><div class="code-head"><span class="code-lang">${lang}</span><button type="button" class="code-copy" aria-label="Copier le code"><i data-lucide="copy" aria-hidden="true"></i></button></div><pre class="md-code">${escapeHtml(b.code)}</pre></div>`;
+  });
   return s;
 }
-
 function relativeTime(date) {
-  const sec = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (sec < 45) return "à l'instant";
+  let sec = Math.floor((Date.now() - date.getTime()) / 1000);
+  const future = sec < 0;
+  sec = Math.abs(sec);
+  const wrap = (val, unit) => (future ? `dans ${val} ${unit}` : `il y a ${val} ${unit}`);
+  if (sec < 5) return "à l'instant";
+  if (sec < 60) return wrap(sec, 's');
   const min = Math.floor(sec / 60);
-  if (min < 60) return `il y a ${min} min`;
+  if (min < 60) return wrap(min, 'min');
   const h = Math.floor(min / 60);
-  if (h < 24) return `il y a ${h} h`;
+  if (h < 24) return wrap(h, 'h');
   const d = Math.floor(h / 24);
-  if (d < 7) return `il y a ${d} j`;
+  if (d < 7) return wrap(d, 'j');
   return date.toLocaleDateString('fr-FR');
 }
 
@@ -620,6 +639,12 @@ function renderGroups() {
 }
 
 async function selectGroup(id) {
+  if (id === currentGroupId) return;
+  if (editing) {
+    const ok = await confirmModal("Ta modification n'a pas été envoyée. Changer de conversation et l'abandonner ?");
+    if (!ok) return;
+    editing = null;
+  }
   currentGroupId = id;
   groupUnread.delete(id);
   let group = currentGroup();
@@ -648,6 +673,8 @@ async function selectGroup(id) {
   clearReply();
   messageInput.value = localStorage.getItem('draft:' + id) || '';
   autoGrow();
+  mentionEnabled = true;
+  updateMentionToggle();
   updateComposerState();
   renderGroups();
 
@@ -765,8 +792,10 @@ function renderTyping(list) {
 function resetChat() {
   closeFloating();
   clearReply();
+  editing = null;
   scrollDown.hidden = true;
   mentionPop.hidden = true;
+  if (mentionToggleBtn) mentionToggleBtn.hidden = true;
   if (unsubTyping) { unsubTyping(); unsubTyping = null; }
   if (currentGroupId && currentUser) Store.clearTyping(currentGroupId, currentUser.uid).catch(() => {});
   typingEl.hidden = true;
@@ -808,6 +837,11 @@ function buildBubble(msg) {
   avatar.className = 'msg-avatar';
   if (msg.authorPhoto) {
     const im = document.createElement('img');
+    im.width = 30;
+    im.height = 30;
+    im.loading = 'lazy';
+    im.decoding = 'async';
+    im.referrerPolicy = 'no-referrer';
     im.src = msg.authorPhoto;
     im.alt = '';
     avatar.appendChild(im);
@@ -1083,6 +1117,17 @@ messagesEl.addEventListener('scroll', closeFloating);
 messagesEl.addEventListener('click', (e) => {
   const sp = e.target.closest('.md-spoiler');
   if (sp) sp.classList.add('revealed');
+  const cc = e.target.closest('.code-copy');
+  if (cc) {
+    e.stopPropagation();
+    const wrap = cc.closest('.code-wrap');
+    const pre = wrap && wrap.querySelector('pre');
+    if (pre) {
+      navigator.clipboard.writeText(pre.textContent)
+        .then(() => toast('Code copié.'))
+        .catch(() => toast('Copie impossible.'));
+    }
+  }
 });
 
 function highlightMentions(html) {
@@ -1100,8 +1145,11 @@ function startEdit(msg, bubble, opts = {}) {
   const displayedWidth = bubble.getBoundingClientRect().width;
   bubble.classList.add('editing');
   bubble.style.width = displayedWidth + 'px';
+  const prevScroll = messagesEl.scrollTop;
   const ta = document.createElement('textarea');
   ta.className = 'edit-area';
+  ta.id = 'edit-area-' + msg.id;
+  ta.name = 'edit-message';
   ta.value = opts.draft != null ? opts.draft : msg.text;
   const bar = document.createElement('div');
   bar.className = 'edit-actions';
@@ -1121,24 +1169,29 @@ function startEdit(msg, bubble, opts = {}) {
     ta.style.height = 'auto';
     ta.style.height = ta.scrollHeight + 'px';
   };
+  const ensureActionsVisible = () => {
+    const barRect = bar.getBoundingClientRect();
+    const contRect = messagesEl.getBoundingClientRect();
+    if (barRect.bottom > contRect.bottom - 8) {
+      messagesEl.scrollTop += barRect.bottom - (contRect.bottom - 8);
+    } else if (barRect.top < contRect.top + 8) {
+      messagesEl.scrollTop -= contRect.top + 8 - barRect.top;
+    }
+  };
   const syncState = () => {
     editing = { id: msg.id, draft: ta.value, start: ta.selectionStart, end: ta.selectionEnd };
   };
   editing = { id: msg.id, draft: ta.value, start: ta.value.length, end: ta.value.length };
-  ta.addEventListener('input', () => { grow(); syncState(); });
+  ta.addEventListener('input', () => { grow(); syncState(); ensureActionsVisible(); });
   ta.addEventListener('keyup', syncState);
   ta.addEventListener('click', syncState);
   grow();
-  if (opts.silent) {
-    const caret = opts.start != null ? opts.start : ta.value.length;
-    const caretEnd = opts.end != null ? opts.end : caret;
-    ta.setSelectionRange(caret, caretEnd);
-    ta.focus({ preventScroll: true });
-  } else {
-    ta.focus();
-    requestAnimationFrame(grow);
-    ta.setSelectionRange(ta.value.length, ta.value.length);
-  }
+  const caret = opts.start != null ? opts.start : ta.value.length;
+  const caretEnd = opts.end != null ? opts.end : caret;
+  ta.setSelectionRange(caret, caretEnd);
+  ta.focus({ preventScroll: true });
+  messagesEl.scrollTop = prevScroll;
+  ensureActionsVisible();
   const close = () => { editing = null; renderMessages(); };
   cancel.addEventListener('click', close);
   save.addEventListener('click', async () => {
@@ -1289,15 +1342,8 @@ function renderMessages() {
   }
   refreshIcons();
   if (editing) {
-    const msg = currentMessages.find((m) => m.id === editing.id);
-    const bubble = messagesEl.querySelector(`.bubble[data-id="${editing.id}"]`);
-    if (msg && bubble) {
-      startEdit(msg, bubble, { draft: editing.draft, start: editing.start, end: editing.end, silent: true });
-    } else {
-      editing = null;
-    }
-  }
-  if (restoreScrollFor === currentGroupId) {
+    messagesEl.scrollTop = prevTop;
+  } else if (restoreScrollFor === currentGroupId) {
     const raw = localStorage.getItem('scroll:' + currentGroupId);
     const saved = raw === null ? null : Number(raw);
     if (saved === null || Number.isNaN(saved)) {
@@ -1312,6 +1358,15 @@ function renderMessages() {
     messagesEl.scrollTop = messagesEl.scrollHeight;
   } else {
     messagesEl.scrollTop = prevTop + (messagesEl.scrollHeight - prevHeight);
+  }
+  if (editing) {
+    const msg = currentMessages.find((m) => m.id === editing.id);
+    const bubble = messagesEl.querySelector(`.bubble[data-id="${editing.id}"]`);
+    if (msg && bubble) {
+      startEdit(msg, bubble, { draft: editing.draft, start: editing.start, end: editing.end, silent: true });
+    } else {
+      editing = null;
+    }
   }
   updateScrollDown();
 }
@@ -1577,6 +1632,11 @@ function renderMembers(group) {
     av.className = 'member__avatar';
     if (m.photo) {
       const im = document.createElement('img');
+      im.width = 26;
+      im.height = 26;
+      im.loading = 'lazy';
+      im.decoding = 'async';
+      im.referrerPolicy = 'no-referrer';
       im.src = m.photo;
       im.alt = '';
       av.appendChild(im);
@@ -1741,6 +1801,14 @@ joinForm.addEventListener('submit', async (e) => {
   await doJoin(joinInput.value);
 });
 
+joinInput.addEventListener('input', () => {
+  const c = joinInput.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 7);
+  let out = c;
+  if (c.length > 5) out = c.slice(0, 2) + '-' + c.slice(2, 5) + '-' + c.slice(5);
+  else if (c.length > 2) out = c.slice(0, 2) + '-' + c.slice(2);
+  joinInput.value = out;
+});
+
 async function doJoin(raw) {
   const code = (raw || '').trim();
   if (!code || !currentUser) return;
@@ -1874,6 +1942,8 @@ function renderPreviewThumbs() {
     const wrap = document.createElement('div');
     wrap.className = 'preview-thumb';
     const im = document.createElement('img');
+    im.width = 96;
+    im.height = 96;
     im.src = item.url;
     im.alt = '';
     const rm = document.createElement('button');
@@ -1916,7 +1986,7 @@ previewSend.addEventListener('click', async () => {
   const text = messageInput.value.trim();
   if (findProfanity(text)) { toast('Message bloqué : langage inapproprié.', 'error'); return; }
   const reply = replyingTo;
-  const mentions = [...new Set([...computeMentions(text), ...replyMentions()])];
+  const mentions = [...new Set([...messageMentions(text), ...replyMentions()])];
   closePreview();
   try {
     for (let i = 0; i < imgs.length; i++) {
@@ -1931,6 +2001,8 @@ previewSend.addEventListener('click', async () => {
       });
     }
     messageInput.value = '';
+    mentionEnabled = true;
+    updateMentionToggle();
     clearReply();
     messagesEl.scrollTop = messagesEl.scrollHeight;
   } catch (err) {
@@ -1951,9 +2023,9 @@ function sendMediaUrl(url) {
     image: clean,
     user: currentUser,
     reply: replyingTo,
-    mentions: [...new Set([...computeMentions(messageInput.value.trim()), ...replyMentions()])],
+    mentions: [...new Set([...messageMentions(messageInput.value.trim()), ...replyMentions()])],
   })
-    .then(() => { messageInput.value = ''; clearReply(); messagesEl.scrollTop = messagesEl.scrollHeight; })
+    .then(() => { messageInput.value = ''; mentionEnabled = true; updateMentionToggle(); clearReply(); messagesEl.scrollTop = messagesEl.scrollHeight; })
     .catch((err) => toast('Envoi impossible : ' + err.message));
 }
 
@@ -2003,8 +2075,10 @@ composer.addEventListener('submit', async (e) => {
   }
 
   const reply = replyingTo;
-  const mentions = [...new Set([...computeMentions(text), ...replyMentions()])];
+  const mentions = [...new Set([...messageMentions(text), ...replyMentions()])];
   messageInput.value = '';
+  mentionEnabled = true;
+  updateMentionToggle();
   localStorage.removeItem('draft:' + currentGroupId);
   autoGrow();
   mentionPop.hidden = true;
@@ -2164,6 +2238,19 @@ messageInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     composer.requestSubmit();
+    return;
+  }
+  if (e.key === 'ArrowUp' && messageInput.value === '' && !editing && currentUser) {
+    const mine = [...currentMessages]
+      .reverse()
+      .find((m) => !m.system && m.author === currentUser.uid && m.text);
+    if (mine) {
+      const bubble = messagesEl.querySelector(`.bubble[data-id="${mine.id}"]`);
+      if (bubble) {
+        e.preventDefault();
+        startEdit(mine, bubble);
+      }
+    }
   }
 });
 
@@ -2226,6 +2313,37 @@ function computeMentions(text) {
   });
   return [...new Set(ids)];
 }
+
+function messageMentions(text) {
+  return mentionEnabled ? computeMentions(text) : [];
+}
+function updateMentionToggle() {
+  const has = computeMentions(messageInput.value).length > 0;
+  mentionToggleBtn.hidden = !has;
+  mentionToggleBtn.classList.toggle('reply-mention--off', !mentionEnabled);
+  mentionToggleBtn.setAttribute('aria-pressed', String(mentionEnabled));
+  mentionToggleBtn.setAttribute(
+    'aria-label',
+    mentionEnabled ? 'Ne pas notifier les personnes mentionnées' : 'Notifier les personnes mentionnées'
+  );
+  refreshIcons();
+}
+mentionToggleBtn.addEventListener('click', () => {
+  mentionEnabled = !mentionEnabled;
+  updateMentionToggle();
+});
+messageInput.addEventListener('input', updateMentionToggle);
+
+messageInput.addEventListener('input', () => {
+  if (/^\/r\s/i.test(messageInput.value)) {
+    messageInput.value = '';
+    autoGrow();
+    cmdPop.hidden = true;
+    mentionPop.hidden = true;
+    if (currentGroupId) localStorage.removeItem('draft:' + currentGroupId);
+    handleCommand('/r');
+  }
+});
 
 messageInput.addEventListener('input', () => {
   const val = messageInput.value;
@@ -2339,6 +2457,14 @@ notifMenu.querySelectorAll('button').forEach((b) => {
   });
 });
 
+
+window.addEventListener('beforeunload', (e) => {
+  if (editing) {
+    e.preventDefault();
+    e.returnValue = '';
+    return '';
+  }
+});
 
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();

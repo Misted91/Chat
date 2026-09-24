@@ -31,7 +31,7 @@
       <header class="sidebar__head">
         <h1>Groupes</h1>
         <div class="user" id="user-zone">
-          <img class="user__avatar" id="user-avatar" alt="" hidden />
+          <img class="user__avatar" id="user-avatar" width="26" height="26" alt="" hidden />
           <span class="user__name" id="user-name"></span>
           <button class="icon-btn" id="install-btn" type="button" hidden aria-label="Installer l'application" title="Installer l'application">
             <i data-lucide="download" aria-hidden="true"></i>
@@ -145,7 +145,10 @@
           placeholder="Écris un message…  (Entrée pour envoyer, Maj+Entrée pour une ligne)"
           autocomplete="off"
         ></textarea>
-        <button class="send-btn" type="submit" aria-label="Envoyer">
+        <button class="icon-btn mention-toggle" id="mention-toggle" type="button" hidden aria-pressed="true" aria-label="Ne pas notifier les personnes mentionnées">
+          <i data-lucide="at-sign" aria-hidden="true"></i>
+        </button>
+        <button class="send-btn" name="send-message" type="submit" aria-label="Envoyer">
           <i data-lucide="send" aria-hidden="true"></i>
         </button>
       </form>
@@ -168,17 +171,17 @@
         <div class="settings-block">
           <span class="settings-label">Visibilité</span>
           <div class="toggle" id="create-visibility">
-            <button type="button" data-value="private" class="active">
+            <button type="button" name="create-vis-private" data-value="private" class="active">
               <i data-lucide="lock" aria-hidden="true"></i><span>Privé</span>
             </button>
-            <button type="button" data-value="public">
+            <button type="button" name="create-vis-public" data-value="public">
               <i data-lucide="globe" aria-hidden="true"></i><span>Public</span>
             </button>
           </div>
         </div>
         <div class="preview-actions">
           <button type="button" class="btn-ghost" id="create-cancel">Annuler</button>
-          <button type="submit" class="preview-send">Créer</button>
+          <button type="submit" name="create-submit" class="preview-send">Créer</button>
         </div>
       </form>
     </div>
@@ -195,12 +198,12 @@
       <form id="join-form">
         <div class="settings-block">
           <label class="settings-label" for="join-input">Code d'invitation</label>
-          <input class="modal-input code-field" type="text" id="join-input" name="join-input" placeholder="XX-XXX-XX" autocomplete="off" maxlength="12" />
+          <input class="modal-input code-field" type="text" id="join-input" name="join-input" placeholder="XX-XXX-XX" autocomplete="off" inputmode="text" maxlength="9" />
           <p class="settings-hint">Colle un code ou un lien d'invitation.</p>
         </div>
         <div class="preview-actions">
           <button type="button" class="btn-ghost" id="join-cancel">Annuler</button>
-          <button type="submit" class="preview-send">Rejoindre</button>
+          <button type="submit" name="join-submit" class="preview-send">Rejoindre</button>
         </div>
       </form>
     </div>
@@ -295,7 +298,7 @@
         </div>
         <div class="preview-actions">
           <button type="button" class="btn-ghost" id="url-cancel">Annuler</button>
-          <button type="submit" class="preview-send">Envoyer</button>
+          <button type="submit" name="url-submit" class="preview-send">Envoyer</button>
         </div>
       </form>
     </div>
@@ -333,7 +336,7 @@
         <p class="settings-hint" id="time-preview"></p>
         <div class="preview-actions">
           <button type="button" class="btn-ghost" id="time-cancel">Annuler</button>
-          <button type="submit" class="preview-send">Insérer</button>
+          <button type="submit" name="time-submit" class="preview-send">Insérer</button>
         </div>
       </form>
     </div>
@@ -379,7 +382,7 @@
         <button class="btn-ghost" id="poll-add-option" type="button">+ Ajouter une option</button>
         <div class="preview-actions">
           <button type="button" class="btn-ghost" id="poll-cancel">Annuler</button>
-          <button type="submit" class="preview-send">Créer</button>
+          <button type="submit" name="poll-submit" class="preview-send">Créer</button>
         </div>
       </form>
     </div>
