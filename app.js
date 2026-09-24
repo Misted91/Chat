@@ -79,6 +79,7 @@ let msgLimit = MSG_PAGE;
 let msgHasMore = false;
 let loadingMore = false;
 let editing = null;
+const expandedSys = new Set();
 
 const loginOverlay = document.getElementById('login-overlay');
 const loginBtn = document.getElementById('login-btn');
@@ -538,6 +539,19 @@ function tryRestoreActive() {
   }
 }
 
+function loadPinnedGroups() {
+  try { return JSON.parse(localStorage.getItem('pinnedGroups') || '[]'); }
+  catch { return []; }
+}
+let pinnedGroups = loadPinnedGroups();
+function isGroupPinned(id) { return pinnedGroups.includes(id); }
+function toggleGroupPin(id) {
+  pinnedGroups = isGroupPinned(id)
+    ? pinnedGroups.filter((g) => g !== id)
+    : [id, ...pinnedGroups];
+  try { localStorage.setItem('pinnedGroups', JSON.stringify(pinnedGroups)); } catch {}
+}
+
 function renderGroups() {
   groupList.innerHTML = '';
   if (groups.length === 0) {
@@ -548,7 +562,11 @@ function renderGroups() {
     return;
   }
 
-  groups.forEach((group) => {
+  const ordered = [...groups].sort(
+    (a, b) => (isGroupPinned(b.id) ? 1 : 0) - (isGroupPinned(a.id) ? 1 : 0)
+  );
+
+  ordered.forEach((group) => {
     const li = document.createElement('li');
     li.className = 'group-item' + (group.id === currentGroupId ? ' active' : '');
 
@@ -563,6 +581,14 @@ function renderGroups() {
     name.textContent = group.name;
     li.appendChild(name);
 
+    if (isGroupPinned(group.id)) {
+      const pin = document.createElement('i');
+      pin.className = 'group-pin';
+      pin.setAttribute('data-lucide', 'pin');
+      pin.setAttribute('aria-hidden', 'true');
+      li.appendChild(pin);
+    }
+
     if (isAdminOf(group)) {
       const tag = document.createElement('span');
       tag.className = 'tag';
@@ -571,6 +597,12 @@ function renderGroups() {
     }
 
     li.addEventListener('click', () => selectGroup(group.id));
+    li.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      toggleGroupPin(group.id);
+      renderGroups();
+      toast(isGroupPinned(group.id) ? 'Groupe épinglé.' : 'Groupe désépinglé.');
+    });
     groupList.appendChild(li);
   });
   refreshIcons();
@@ -893,6 +925,11 @@ function buildBubble(msg) {
     e.stopPropagation();
     openMessageMenu(items, menuBtn);
   });
+  bubble.addEventListener('contextmenu', (e) => {
+    if (e.target.closest('a')) return;
+    e.preventDefault();
+    openMessageMenu(items, menuBtn, { x: e.clientX, y: e.clientY });
+  });
 
   bubble.appendChild(menuBtn);
   row.appendChild(bubble);
@@ -915,23 +952,30 @@ function buildBrokenImage(src) {
   return box;
 }
 
-function positionFloating(el, anchor) {
+function positionFloating(el, anchor, point) {
   el.hidden = false;
-  const r = anchor.getBoundingClientRect();
   const w = el.offsetWidth;
   const h = el.offsetHeight;
-  let left = r.right - w;
-  if (left < 8) left = 8;
+  let left, top;
+  if (point) {
+    left = point.x;
+    top = point.y;
+  } else {
+    const r = anchor.getBoundingClientRect();
+    left = r.right - w;
+    top = r.bottom + 4;
+    if (top + h > window.innerHeight - 8) top = r.top - h - 4;
+  }
   if (left + w > window.innerWidth - 8) left = window.innerWidth - 8 - w;
-  let top = r.bottom + 4;
-  if (top + h > window.innerHeight - 8) top = r.top - h - 4;
+  if (left < 8) left = 8;
+  if (top + h > window.innerHeight - 8) top = window.innerHeight - 8 - h;
   if (top < 8) top = 8;
   el.style.left = left + 'px';
   el.style.top = top + 'px';
 }
 
-function openMessageMenu(items, anchor) {
-  const open = !floatingMenu.hidden && floatingMenu.dataset.anchor === anchorId(anchor);
+function openMessageMenu(items, anchor, point) {
+  const open = !point && !floatingMenu.hidden && floatingMenu.dataset.anchor === anchorId(anchor);
   closeFloating();
   if (open) return;
   floatingMenu.dataset.anchor = anchorId(anchor);
@@ -944,7 +988,7 @@ function openMessageMenu(items, anchor) {
     floatingMenu.appendChild(b);
   });
   refreshIcons();
-  positionFloating(floatingMenu, anchor);
+  positionFloating(floatingMenu, anchor, point);
 }
 
 function openReactionPicker(msg, anchor) {
@@ -1143,6 +1187,28 @@ function loadMoreMessages() {
   subscribeMessages(currentGroupId);
 }
 
+function appendSystemRun(run) {
+  if (run.length <= 3) {
+    run.forEach((m) => messagesEl.appendChild(buildBubble(m)));
+    return;
+  }
+  const key = run[0].id;
+  const expanded = expandedSys.has(key);
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.className = 'system-toggle';
+  toggle.textContent = expanded
+    ? 'Voir moins'
+    : `Voir ${run.length - 3} message${run.length - 3 > 1 ? 's' : ''} de plus`;
+  toggle.addEventListener('click', () => {
+    if (expanded) expandedSys.delete(key); else expandedSys.add(key);
+    renderMessages();
+  });
+  messagesEl.appendChild(toggle);
+  const shown = expanded ? run : run.slice(-3);
+  shown.forEach((m) => messagesEl.appendChild(buildBubble(m)));
+}
+
 function renderMessages() {
   const atBottom =
     messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 60;
@@ -1150,7 +1216,19 @@ function renderMessages() {
   const prevHeight = messagesEl.scrollHeight;
   closeFloating();
   messagesEl.innerHTML = '';
-  currentMessages.forEach((msg) => messagesEl.appendChild(buildBubble(msg)));
+  let i = 0;
+  while (i < currentMessages.length) {
+    if (currentMessages[i].system) {
+      let j = i;
+      const run = [];
+      while (j < currentMessages.length && currentMessages[j].system) { run.push(currentMessages[j]); j++; }
+      appendSystemRun(run);
+      i = j;
+    } else {
+      messagesEl.appendChild(buildBubble(currentMessages[i]));
+      i++;
+    }
+  }
   refreshIcons();
   if (editing) {
     const msg = currentMessages.find((m) => m.id === editing.id);

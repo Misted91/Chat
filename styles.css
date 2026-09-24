@@ -76,6 +76,7 @@ html, body {
 .sidebar__head {
   padding: 18px 16px 12px;
   border-bottom: 1px solid var(--border);
+  position: relative;
 }
 
 .sidebar__head h1 {
@@ -225,6 +226,9 @@ html, body {
   padding: 4px 8px;
   overflow-y: auto;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .group-item {
@@ -260,17 +264,19 @@ html, body {
   position: relative;
 }
 
-.notif-wrap { position: relative; display: flex; }
+.notif-wrap { display: flex; }
 .notif-menu {
   position: absolute;
-  top: 110%;
-  right: 0;
+  top: calc(100% - 4px);
+  right: 16px;
+  left: auto;
   z-index: 25;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 6px;
-  width: 190px;
+  width: min(190px, calc(100vw - 32px));
+  max-width: calc(100% - 32px);
   box-shadow: 0 6px 20px rgba(0, 0, 0, .4);
 }
 .notif-menu__title { display: block; font-size: 11px; color: var(--muted); padding: 4px 8px; }
@@ -735,19 +741,25 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
 .modal__close:hover { color: var(--text); }
 .modal__sub { color: var(--muted); font-size: 13px; margin: 6px 0 14px; }
 
-.settings-block { margin-top: 18px; }
+.settings-block {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .settings-label {
-  display: block;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: .04em;
   color: var(--muted);
-  margin-bottom: 8px;
+  margin: 0;
 }
-.settings-hint { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+.settings-hint { font-size: 12px; color: var(--muted); margin: 0; }
 
 .group-vis { width: 14px; height: 14px; flex: none; color: var(--muted); }
 .group-item.active .group-vis { color: #fff; }
+.group-pin { width: 13px; height: 13px; flex: none; color: var(--accent); }
+.group-item.active .group-pin { color: #fff; }
 .group-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .toggle { display: flex; gap: 8px; }
@@ -952,6 +964,17 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   padding: 4px 12px;
   border-radius: 20px;
 }
+.system-toggle {
+  align-self: center;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  padding: 3px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+}
+.system-toggle:hover { background: var(--panel-2); }
 
 .typing {
   position: absolute;
