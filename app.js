@@ -967,18 +967,27 @@ function buildIcebreaker() {
   for (let i = 0; i < key.length; i++) seed = (seed * 31 + key.charCodeAt(i)) >>> 0;
   const topic = ICEBREAKERS[seed % ICEBREAKERS.length];
   const icon = document.createElement('i');
-  icon.setAttribute('data-lucide', 'sparkles');
+  icon.setAttribute('data-lucide', 'party-popper');
   icon.setAttribute('aria-hidden', 'true');
+  const g = currentGroup();
   const h = document.createElement('h3');
-  h.textContent = 'C’est le tout début de cette conversation';
+  h.textContent = g ? `Bienvenue dans « ${g.name} »` : 'Bienvenue';
   const p = document.createElement('p');
-  p.textContent = 'Lancez-vous ! Une idée pour briser la glace :';
+  p.textContent = 'Ce salon vient d’être créé — c’est le tout début. Lancez la discussion !';
+  const label = document.createElement('div');
+  label.className = 'chat-empty__label';
+  const bulb = document.createElement('i');
+  bulb.setAttribute('data-lucide', 'lightbulb');
+  bulb.setAttribute('aria-hidden', 'true');
+  label.appendChild(bulb);
+  label.appendChild(document.createTextNode('Une idée pour briser la glace'));
   const t = document.createElement('div');
   t.className = 'chat-empty__topic';
   t.textContent = topic;
   box.appendChild(icon);
   box.appendChild(h);
   box.appendChild(p);
+  box.appendChild(label);
   box.appendChild(t);
   return box;
 }
@@ -997,7 +1006,7 @@ function buildBubble(msg, pos = {}) {
   const isMe = currentUser && msg.author === currentUser.uid;
   const first = pos.first !== false;
   const last = pos.last !== false;
-  const showId = first || last;
+  const showId = first;
 
   const row = document.createElement('div');
   row.className = 'msg-row' + (isMe ? ' me' : '') + (first ? '' : ' grp-cont');
@@ -1097,6 +1106,7 @@ function buildBubble(msg, pos = {}) {
     img.addEventListener('click', () => openLightbox(msg.image));
     img.src = msg.image;
     bubble.appendChild(img);
+    if (!msg.text && msg.type !== 'poll' && !msg.audio) bubble.classList.add('bubble--img');
   }
 
   if (msg.type === 'poll') {
@@ -1117,6 +1127,11 @@ function buildBubble(msg, pos = {}) {
     text.className = 'text';
     text.innerHTML = highlightMentions(renderMarkdown(msg.text));
     bubble.appendChild(text);
+    if (text.childNodes.length === 1 && text.firstElementChild
+        && text.firstElementChild.classList.contains('code-wrap')
+        && !msg.image && msg.type !== 'poll' && !msg.audio) {
+      bubble.classList.add('bubble--code');
+    }
   }
 
   const translation = document.createElement('div');
@@ -1192,7 +1207,7 @@ function buildBubble(msg, pos = {}) {
     openMessageMenu(items, menuBtn);
   });
   bubble.addEventListener('contextmenu', (e) => {
-    if (e.target.closest('a')) return;
+    if (e.target.closest('a, textarea, input')) return;
     e.preventDefault();
     openMessageMenu(items, menuBtn, { x: e.clientX, y: e.clientY });
   });
