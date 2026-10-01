@@ -1,10 +1,13 @@
 import { Store } from './store.js';
 import {
+  auth,
   loginWithGoogle,
   logout,
   watchAuth,
   handleRedirectResult,
 } from './firebase.js';
+
+const UPLOAD_API_URL = 'https://change-me.example.com/upload';
 
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 
@@ -1051,7 +1054,7 @@ function buildBubble(msg, pos = {}) {
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble' + (isMe ? ' me' : '') + (msg.pinned ? ' pinned' : '')
-    + (first ? '' : ' grp-top') + (last ? '' : ' grp-bot');
+    + (first ? '' : ' grp-top') + (!last || (first && last) ? ' grp-bot' : '');
   bubble.dataset.id = msg.id;
 
   const meta = document.createElement('span');
@@ -2214,6 +2217,21 @@ previewOverlay.addEventListener('click', (e) => {
   if (e.target === previewOverlay) closePreview();
 });
 
+async function uploadToMega(dataUrl, filename) {
+  const blob = await (await fetch(dataUrl)).blob();
+  const token = currentUser && (await currentUser.getIdToken());
+  const fd = new FormData();
+  fd.append('file', blob, filename);
+  const res = await fetch(UPLOAD_API_URL, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: fd,
+  });
+  if (!res.ok) throw new Error("Échec de l'upload.");
+  const data = await res.json();
+  return data.url;
+}
+
 previewSend.addEventListener('click', async () => {
   if (!pendingImages.length || !currentGroupId || !currentUser) return;
   if (!canPostIn(currentGroup())) {
@@ -2226,11 +2244,13 @@ previewSend.addEventListener('click', async () => {
   const reply = replyingTo;
   const mentions = [...new Set([...messageMentions(text), ...replyMentions()])];
   closePreview();
+  plusBtn.classList.add('busy');
   try {
     for (let i = 0; i < imgs.length; i++) {
+      const url = await uploadToMega(imgs[i].url, `image-${Date.now()}-${i}.webp`);
       await Store.addMessage(currentGroupId, {
         text: i === 0 ? text : '',
-        image: imgs[i].url,
+        image: url,
         imgW: imgs[i].w || 0,
         imgH: imgs[i].h || 0,
         user: currentUser,
@@ -2245,6 +2265,8 @@ previewSend.addEventListener('click', async () => {
     messagesEl.scrollTop = messagesEl.scrollHeight;
   } catch (err) {
     toast("Impossible d'envoyer l'image : " + err.message);
+  } finally {
+    plusBtn.classList.remove('busy');
   }
 });
 

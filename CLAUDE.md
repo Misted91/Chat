@@ -32,6 +32,7 @@ la connexion Google (popup) fonctionne sans blocage cross-domaine.
 | `manifest.json`, `sw.js`, `icon-192/512.png` | PWA (installable, service worker cache-first-réseau) |
 | `lucide.min.js` | Lucide **auto-hébergé** (v0.294.0, chargé avec `integrity`/SRI) |
 | `README.md` | Doc utilisateur courte |
+| `server/` | Service Node/Express séparé (déployé sur Coolify) qui upload les images vers Mega S4 |
 
 Chargement : `index.html` charge `lucide.min.js` (classique) puis `app.js`
 (module) ; `app.js` importe `store.js` et `firebase.js`.
@@ -76,9 +77,17 @@ groups/{groupId} : {
 invites/{code} : { groupId, createdBy }  // pour rejoindre par code
 ```
 
-- Les images/GIF sont stockées **en data URL directement dans le message**
-  (pas de Firebase Storage) → compression WebP côté client (`compressImage`),
-  plafonnées ~900 Ko côté client, ≤ 1 Mo dans les règles.
+- Les images/GIF sont compressées en WebP côté client (`compressImage`), puis
+  uploadées via le service `server/` (Express) vers un bucket **Mega S4**
+  (stockage objet S3-compatible), authentifié par des **tokens** (clé
+  d'accès/clé secrète S4, `MEGA_S4_ACCESS_KEY`/`MEGA_S4_SECRET_KEY`), jamais
+  par email/mot de passe du compte Mega. Le bucket reste privé : `msg.image`
+  stocke une URL `/file/:key` servie par le proxy du service (plus de data
+  URL en base). Le jeton envoyé au service par le client est un ID token
+  Firebase (`Authorization: Bearer <idToken>`), vérifié côté serveur avec
+  `firebase-admin` — les tokens S4 ne quittent jamais ce service.
+- Côté front, l'URL du service d'upload est la constante `UPLOAD_API_URL` en
+  haut de `app.js` : à mettre à jour après chaque déploiement Coolify.
 - Réactions modifiées via `arrayUnion`/`arrayRemove` par champ (`reactions.<emoji>`).
 
 ## Sécurité (résumé des règles)

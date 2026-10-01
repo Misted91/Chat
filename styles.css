@@ -601,7 +601,6 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   border-radius: 8px;
   overflow: hidden;
   background: rgba(0, 0, 0, .35);
-  border: 1px solid rgba(255, 255, 255, .08);
 }
 .code-head {
   display: flex;
@@ -744,9 +743,9 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
 .msg-avatar.spacer { background: transparent; }
 .msg-row.grp-cont { margin-top: -25px; }
 .msg-row:not(.me) .bubble.grp-top { border-top-left-radius: 5px; }
-.msg-row:not(.me) .bubble.grp-bot { border-bottom-left-radius: 5px; border-top-left-radius: 5px; }
+.msg-row:not(.me) .bubble.grp-bot { border-top-left-radius: 5px; }
 .msg-row.me .bubble.grp-top { border-top-right-radius: 5px; }
-.msg-row.me .bubble.grp-bot { border-bottom-right-radius: 5px; border-top-right-radius: 5px; }
+.msg-row.me .bubble.grp-bot { border-top-right-radius: 5px; }
 
 .chat-empty {
   align-self: center;
