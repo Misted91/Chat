@@ -31,7 +31,9 @@ Variables d'environnement à définir (voir `.env.example`) :
 - `PUBLIC_BASE_URL` : URL publique HTTPS de ce service une fois déployé
   (ex. `https://upload.example.com`), utilisée pour construire les liens
   `/file/:key` renvoyés aux clients.
-- `ALLOWED_ORIGINS` : `https://chat-fd96b.web.app,https://chat-fd96b.firebaseapp.com`
+- `ALLOWED_ORIGINS` : liste des origines autorisées en CORS, séparées par des
+  virgules — doit inclure **tous** les domaines depuis lesquels l'app est
+  réellement servie (ex. `https://chat-fd96b.web.app,https://chat-fd96b.firebaseapp.com,https://misted91.github.io`).
 - `FIREBASE_PROJECT_ID` : `chat-fd96b`
 - `MAX_FILE_SIZE_BYTES`, `PORT` : optionnels.
 
