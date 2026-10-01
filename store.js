@@ -298,7 +298,7 @@ export const Store = {
 
   async clearMessages(groupId, count) {
     const snap = await getDocs(collection(db, 'groups', groupId, 'messages'));
-    let docs = snap.docs.map((d) => ({ ref: d.ref, ts: d.data().ts }));
+    let docs = snap.docs.map((d) => ({ ref: d.ref, ts: d.data().ts, image: d.data().image, file: d.data().file }));
     docs.sort((a, b) => (b.ts?.toMillis?.() || 0) - (a.ts?.toMillis?.() || 0));
     if (count !== 'all') docs = docs.slice(0, Math.max(0, count | 0));
     let batch = writeBatch(db);
@@ -308,6 +308,6 @@ export const Store = {
       if (++n >= 450) { await batch.commit(); batch = writeBatch(db); n = 0; }
     }
     if (n) await batch.commit();
-    return docs.length;
+    return docs;
   },
 };

@@ -4,8 +4,16 @@ Petit service Express qui reçoit un fichier depuis l'app et le stocke sur un
 bucket **Mega S4** (service de stockage objet S3-compatible de Mega), via des
 tokens (clé d'accès + clé secrète) — aucun email/mot de passe du compte Mega
 n'est utilisé. Le bucket reste privé : les fichiers sont servis via
-`GET /file/:key`, qui proxy l'objet depuis S4 sans jamais exposer les tokens
-au client.
+`GET /file/:groupId/:userId/:hash/:fileName`, qui proxy l'objet depuis S4
+sans jamais exposer les tokens au client.
+
+Les fichiers sont stockés avec une clé adressée par contenu
+(`groupId/uid/sha256/fileName`) : si le même utilisateur renvoie exactement
+le même fichier dans la même conversation, le hash est identique, l'objet
+existant est détecté via `HeadObject` et réutilisé (pas de re-upload, même
+URL) — tout en gardant le nom de fichier d'origine lisible à la fin de l'URL.
+Un nom identique mais un contenu différent produit un hash différent, donc
+une URL différente, sans écraser l'ancien fichier.
 
 ## Déploiement sur Coolify
 

@@ -2,7 +2,16 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import admin from 'firebase-admin';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import crypto from 'node:crypto';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  DeleteObjectCommand,
+  DeleteObjectsCommand,
+  ListObjectsV2Command,
+} from '@aws-sdk/client-s3';
 
 const PORT = process.env.PORT || 3000;
 const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'chat-fd96b';
@@ -57,6 +66,20 @@ const upload = multer({
   limits: { fileSize: MAX_FILE_SIZE },
 });
 
+function sanitizeSegment(value, maxLen) {
+  const cleaned = String(value || '')
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .replace(/^\.+/, '');
+  return cleaned.slice(0, maxLen) || 'x';
+}
+
+function buildFileKey(groupId, uid, hash, fileName) {
+  const group = sanitizeSegment(groupId, 80);
+  const user = sanitizeSegment(uid, 80);
+  const name = sanitizeSegment(fileName || 'fichier', 150);
+  return `${group}/${user}/${hash}/${name}`;
+}
+
 async function verifyAuth(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -81,56 +104,128 @@ app.post('/upload', verifyAuth, upload.single('file'), async (req, res) => {
     return res.status(503).json({ error: "Service d'upload non configuré." });
   }
   if (!req.file) return res.status(400).json({ error: 'Aucun fichier reçu.' });
-  const safeName = `${Date.now()}-${Math.random().toString(36).slice(2)}-${(req.file.originalname || 'fichier').replace(/[\\/]/g, '_')}`;
+  const groupId = req.body.groupId;
+  if (!groupId) return res.status(400).json({ error: 'groupId manquant.' });
+
+  const hash = crypto.createHash('sha256').update(req.file.buffer).digest('hex').slice(0, 24);
+  const fileName = req.file.originalname || 'fichier';
+  const key = buildFileKey(groupId, req.user.uid, hash, fileName);
   const startedAt = Date.now();
   console.log(
-    `[upload] démarrage uid=${req.user.uid} key=${safeName} size=${req.file.size} type=${req.file.mimetype}`
+    `[upload] démarrage uid=${req.user.uid} group=${groupId} key=${key} size=${req.file.size} type=${req.file.mimetype}`
   );
   try {
-    await s3.send(
-      new PutObjectCommand({
-        Bucket: MEGA_S4_BUCKET,
-        Key: safeName,
-        Body: req.file.buffer,
-        ContentType: req.file.mimetype,
-      })
+    let reused = false;
+    try {
+      await s3.send(new HeadObjectCommand({ Bucket: MEGA_S4_BUCKET, Key: key }));
+      reused = true;
+    } catch {
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: MEGA_S4_BUCKET,
+          Key: key,
+          Body: req.file.buffer,
+          ContentType: req.file.mimetype,
+        })
+      );
+    }
+    console.log(
+      `[upload] ${reused ? 'réutilisé (déjà présent)' : 'succès'} key=${key} en ${Date.now() - startedAt}ms`
     );
-    console.log(`[upload] succès key=${safeName} en ${Date.now() - startedAt}ms`);
     res.json({
-      url: `${PUBLIC_BASE_URL}/file/${encodeURIComponent(safeName)}`,
-      name: safeName,
+      url: `${PUBLIC_BASE_URL}/file/${encodeURIComponent(groupId)}/${encodeURIComponent(req.user.uid)}/${hash}/${encodeURIComponent(fileName)}`,
+      name: fileName,
       size: req.file.size,
       type: req.file.mimetype,
     });
   } catch (err) {
     console.error(
-      `[upload] échec key=${safeName} en ${Date.now() - startedAt}ms : ${err.name} ${err.Code || err.code || ''} ${err.message}`
+      `[upload] échec key=${key} en ${Date.now() - startedAt}ms : ${err.name} ${err.Code || err.code || ''} ${err.message}`
     );
     res.status(502).json({ error: "Échec de l'upload vers Mega." });
   }
 });
 
-app.get('/file/:key', async (req, res) => {
+app.get('/file/:groupId/:userId/:hash/:fileName', async (req, res) => {
   if (!MEGA_CONFIGURED) {
     console.warn('[file] refusé : Mega S4 non configuré.');
     return res.status(503).json({ error: "Service d'upload non configuré." });
   }
+  if (!/^[a-f0-9]{1,24}$/i.test(req.params.hash)) {
+    return res.status(400).json({ error: 'Clé invalide.' });
+  }
+  const key = buildFileKey(req.params.groupId, req.params.userId, req.params.hash, req.params.fileName);
   const startedAt = Date.now();
   try {
-    const obj = await s3.send(
-      new GetObjectCommand({ Bucket: MEGA_S4_BUCKET, Key: req.params.key })
-    );
-    console.log(`[file] servi key=${req.params.key} en ${Date.now() - startedAt}ms`);
+    const obj = await s3.send(new GetObjectCommand({ Bucket: MEGA_S4_BUCKET, Key: key }));
+    console.log(`[file] servi key=${key} en ${Date.now() - startedAt}ms`);
     res.set('Content-Type', obj.ContentType || 'application/octet-stream');
     res.set('Cache-Control', 'public, max-age=31536000, immutable');
     obj.Body.pipe(res);
   } catch (err) {
     console.error(
-      `[file] introuvable key=${req.params.key} en ${Date.now() - startedAt}ms : ${err.name} ${err.Code || err.code || ''} ${err.message}`
+      `[file] introuvable key=${key} en ${Date.now() - startedAt}ms : ${err.name} ${err.Code || err.code || ''} ${err.message}`
     );
     res.status(404).json({ error: 'Fichier introuvable.' });
   }
 });
+
+app.delete('/file/:groupId/:userId/:hash/:fileName', verifyAuth, async (req, res) => {
+  if (!MEGA_CONFIGURED) {
+    console.warn('[file-delete] refusé : Mega S4 non configuré.');
+    return res.status(503).json({ error: "Service d'upload non configuré." });
+  }
+  if (!/^[a-f0-9]{1,24}$/i.test(req.params.hash)) {
+    return res.status(400).json({ error: 'Clé invalide.' });
+  }
+  const key = buildFileKey(req.params.groupId, req.params.userId, req.params.hash, req.params.fileName);
+  try {
+    await s3.send(new DeleteObjectCommand({ Bucket: MEGA_S4_BUCKET, Key: key }));
+    console.log(`[file-delete] supprimé uid=${req.user.uid} key=${key}`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(`[file-delete] échec key=${key} : ${err.name} ${err.Code || err.code || ''} ${err.message}`);
+    res.status(502).json({ error: 'Suppression impossible.' });
+  }
+});
+
+app.delete('/group/:groupId', verifyAuth, async (req, res) => {
+  if (!MEGA_CONFIGURED) {
+    console.warn('[group-delete] refusé : Mega S4 non configuré.');
+    return res.status(503).json({ error: "Service d'upload non configuré." });
+  }
+  const prefix = `${sanitizeSegment(req.params.groupId, 80)}/`;
+  let deleted = 0;
+  try {
+    let continuationToken;
+    do {
+      const list = await s3.send(
+        new ListObjectsV2Command({
+          Bucket: MEGA_S4_BUCKET,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        })
+      );
+      const objects = (list.Contents || []).map((o) => ({ Key: o.Key }));
+      if (objects.length) {
+        await s3.send(
+          new DeleteObjectsCommand({ Bucket: MEGA_S4_BUCKET, Delete: { Objects: objects } })
+        );
+        deleted += objects.length;
+      }
+      continuationToken = list.IsTruncated ? list.NextContinuationToken : undefined;
+    } while (continuationToken);
+    console.log(`[group-delete] uid=${req.user.uid} group=${req.params.groupId} fichiers supprimés=${deleted}`);
+    res.json({ ok: true, deleted });
+  } catch (err) {
+    console.error(
+      `[group-delete] échec group=${req.params.groupId} (${deleted} supprimés avant échec) : ${err.name} ${err.Code || err.code || ''} ${err.message}`
+    );
+    res.status(502).json({ error: 'Suppression impossible.' });
+  }
+});
+
+
 
 app.use((err, req, res, next) => {
   if (err && err.code === 'LIMIT_FILE_SIZE') {

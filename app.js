@@ -8,6 +8,7 @@ import {
 } from './firebase.js';
 
 const UPLOAD_API_URL = 'https://chat.misted.vps.totolol24.ovh/upload';
+const UPLOAD_ORIGIN = new URL(UPLOAD_API_URL).origin;
 const UPLOAD_FEATURE_ENABLED = true;
 const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
 
@@ -1232,6 +1233,7 @@ function buildBubble(msg, pos = {}) {
         const ok = await confirmModal('Supprimer ce message ?');
         if (!ok) return;
       }
+      deleteMegaFilesOf(msg);
       Store.deleteMessage(currentGroupId, msg.id).catch((err) =>
         toast('Suppression impossible : ' + err.message)
       );
@@ -2096,7 +2098,9 @@ deleteBtn.addEventListener('click', async () => {
   const ok = await confirmModal(`Supprimer le groupe « ${group.name} » ?`);
   if (!ok) return;
   try {
+    const groupId = currentGroupId;
     await Store.deleteGroup(currentGroupId, group.joinCode);
+    deleteMegaGroupFiles(groupId);
     resetChat();
   } catch (err) {
     toast('Suppression impossible : ' + err.message);
@@ -2311,6 +2315,7 @@ async function uploadToMega(blob, filename) {
   const token = currentUser && (await currentUser.getIdToken());
   const fd = new FormData();
   fd.append('file', blob, filename);
+  fd.append('groupId', currentGroupId);
   const res = await fetch(UPLOAD_API_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
@@ -2319,6 +2324,34 @@ async function uploadToMega(blob, filename) {
   if (!res.ok) throw new Error("Échec de l'upload.");
   const data = await res.json();
   return data.url;
+}
+
+async function deleteMegaFile(url) {
+  if (!url || !url.startsWith(UPLOAD_ORIGIN) || !currentUser) return;
+  try {
+    const token = await currentUser.getIdToken();
+    await fetch(url, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+  } catch {
+    /* best effort, la suppression Firestore prime */
+  }
+}
+
+async function deleteMegaGroupFiles(groupId) {
+  if (!groupId || !currentUser) return;
+  try {
+    const token = await currentUser.getIdToken();
+    await fetch(`${UPLOAD_ORIGIN}/group/${encodeURIComponent(groupId)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    /* best effort, la suppression Firestore prime */
+  }
+}
+
+function deleteMegaFilesOf(msg) {
+  if (msg.image) deleteMegaFile(msg.image);
+  if (msg.file) deleteMegaFile(msg.file);
 }
 
 previewSend.addEventListener('click', async () => {
@@ -2502,8 +2535,9 @@ async function handleCommand(text) {
       if (n !== 'all' && (!n || n < 1)) { toast('Usage : /group clear <nombre|all>'); return true; }
       const ok = await confirmModal(n === 'all' ? 'Supprimer TOUS les messages ?' : `Supprimer les ${n} derniers messages ?`);
       if (!ok) return true;
-      const count = await Store.clearMessages(currentGroupId, n);
-      toast(`${count} message(s) supprimé(s).`);
+      const deleted = await Store.clearMessages(currentGroupId, n);
+      deleted.forEach((d) => deleteMegaFilesOf(d));
+      toast(`${deleted.length} message(s) supprimé(s).`);
       return true;
     }
 
