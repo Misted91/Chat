@@ -1288,7 +1288,9 @@ function buildFileCard(msg) {
   info.appendChild(size);
   const dl = document.createElement('a');
   dl.className = 'bubble-file__dl';
-  dl.href = msg.file;
+  const downloadUrl = new URL(msg.file);
+  downloadUrl.searchParams.set('download', '2');
+  dl.href = downloadUrl.toString();
   dl.download = msg.fileName || '';
   dl.target = '_blank';
   dl.rel = 'noopener noreferrer';
