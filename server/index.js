@@ -159,8 +159,14 @@ app.get('/file/:groupId/:userId/:hash/:fileName', async (req, res) => {
   try {
     const obj = await s3.send(new GetObjectCommand({ Bucket: MEGA_S4_BUCKET, Key: key }));
     console.log(`[file] servi key=${key} en ${Date.now() - startedAt}ms`);
-    res.set('Content-Type', obj.ContentType || 'application/octet-stream');
+    const contentType = obj.ContentType || 'application/octet-stream';
+    res.set('Content-Type', contentType);
     res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    const disposition = contentType.startsWith('image/') ? 'inline' : 'attachment';
+    res.set(
+      'Content-Disposition',
+      `${disposition}; filename*=UTF-8''${encodeURIComponent(req.params.fileName)}`
+    );
     obj.Body.pipe(res);
   } catch (err) {
     console.error(
