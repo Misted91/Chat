@@ -25,6 +25,10 @@ if (!MEGA_CONFIGURED) {
   console.warn(
     'Mega S4 non configuré (MEGA_S4_ENDPOINT/MEGA_S4_ACCESS_KEY/MEGA_S4_SECRET_KEY/MEGA_S4_BUCKET/PUBLIC_BASE_URL manquants) : /upload et /file répondront 503.'
   );
+} else {
+  console.log(
+    `Mega S4 configuré : endpoint=${MEGA_S4_ENDPOINT} region=${MEGA_S4_REGION} bucket=${MEGA_S4_BUCKET} forcePathStyle=${process.env.MEGA_S4_FORCE_PATH_STYLE === 'true'} publicBaseUrl=${PUBLIC_BASE_URL}`
+  );
 }
 
 admin.initializeApp({ projectId: FIREBASE_PROJECT_ID });
@@ -56,11 +60,15 @@ const upload = multer({
 async function verifyAuth(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'Authentification requise.' });
+  if (!token) {
+    console.warn(`[auth] ${req.method} ${req.path} refusé : pas de jeton.`);
+    return res.status(401).json({ error: 'Authentification requise.' });
+  }
   try {
     req.user = await admin.auth().verifyIdToken(token);
     next();
   } catch (err) {
+    console.warn(`[auth] ${req.method} ${req.path} jeton invalide : ${err.message}`);
     res.status(401).json({ error: 'Jeton invalide.' });
   }
 }
@@ -68,9 +76,16 @@ async function verifyAuth(req, res, next) {
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 app.post('/upload', verifyAuth, upload.single('file'), async (req, res) => {
-  if (!MEGA_CONFIGURED) return res.status(503).json({ error: "Service d'upload non configuré." });
+  if (!MEGA_CONFIGURED) {
+    console.warn('[upload] refusé : Mega S4 non configuré.');
+    return res.status(503).json({ error: "Service d'upload non configuré." });
+  }
   if (!req.file) return res.status(400).json({ error: 'Aucun fichier reçu.' });
   const safeName = `${Date.now()}-${Math.random().toString(36).slice(2)}-${(req.file.originalname || 'fichier').replace(/[\\/]/g, '_')}`;
+  const startedAt = Date.now();
+  console.log(
+    `[upload] démarrage uid=${req.user.uid} key=${safeName} size=${req.file.size} type=${req.file.mimetype}`
+  );
   try {
     await s3.send(
       new PutObjectCommand({
@@ -80,6 +95,7 @@ app.post('/upload', verifyAuth, upload.single('file'), async (req, res) => {
         ContentType: req.file.mimetype,
       })
     );
+    console.log(`[upload] succès key=${safeName} en ${Date.now() - startedAt}ms`);
     res.json({
       url: `${PUBLIC_BASE_URL}/file/${encodeURIComponent(safeName)}`,
       name: safeName,
@@ -87,21 +103,31 @@ app.post('/upload', verifyAuth, upload.single('file'), async (req, res) => {
       type: req.file.mimetype,
     });
   } catch (err) {
-    console.error('Upload Mega S4 échoué :', err);
+    console.error(
+      `[upload] échec key=${safeName} en ${Date.now() - startedAt}ms : ${err.name} ${err.Code || err.code || ''} ${err.message}`
+    );
     res.status(502).json({ error: "Échec de l'upload vers Mega." });
   }
 });
 
 app.get('/file/:key', async (req, res) => {
-  if (!MEGA_CONFIGURED) return res.status(503).json({ error: "Service d'upload non configuré." });
+  if (!MEGA_CONFIGURED) {
+    console.warn('[file] refusé : Mega S4 non configuré.');
+    return res.status(503).json({ error: "Service d'upload non configuré." });
+  }
+  const startedAt = Date.now();
   try {
     const obj = await s3.send(
       new GetObjectCommand({ Bucket: MEGA_S4_BUCKET, Key: req.params.key })
     );
+    console.log(`[file] servi key=${req.params.key} en ${Date.now() - startedAt}ms`);
     res.set('Content-Type', obj.ContentType || 'application/octet-stream');
     res.set('Cache-Control', 'public, max-age=31536000, immutable');
     obj.Body.pipe(res);
   } catch (err) {
+    console.error(
+      `[file] introuvable key=${req.params.key} en ${Date.now() - startedAt}ms : ${err.name} ${err.Code || err.code || ''} ${err.message}`
+    );
     res.status(404).json({ error: 'Fichier introuvable.' });
   }
 });
