@@ -115,6 +115,3 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Serveur d'upload Mega S4 démarré sur le port ${PORT}`);
 });
-
-  console.log(`Serveur d'upload Mega démarré sur le port ${PORT}`);
-});
