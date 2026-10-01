@@ -158,15 +158,21 @@ app.get('/file/:groupId/:userId/:hash/:fileName', async (req, res) => {
   const startedAt = Date.now();
   try {
     const obj = await s3.send(new GetObjectCommand({ Bucket: MEGA_S4_BUCKET, Key: key }));
-    console.log(`[file] servi key=${key} en ${Date.now() - startedAt}ms`);
     const contentType = obj.ContentType || 'application/octet-stream';
-    res.set('Content-Type', contentType);
-    res.set('Cache-Control', 'public, max-age=31536000, immutable');
     const disposition = contentType.startsWith('image/') ? 'inline' : 'attachment';
+    const etag = obj.ETag || `"${req.params.hash}"`;
+    res.set('Content-Type', contentType);
+    res.set('ETag', etag);
+    res.set('Cache-Control', 'public, max-age=86400, must-revalidate');
     res.set(
       'Content-Disposition',
       `${disposition}; filename*=UTF-8''${encodeURIComponent(req.params.fileName)}`
     );
+    if (req.headers['if-none-match'] === etag) {
+      console.log(`[file] 304 (cache valide) key=${key} en ${Date.now() - startedAt}ms`);
+      return res.status(304).end();
+    }
+    console.log(`[file] servi key=${key} en ${Date.now() - startedAt}ms`);
     obj.Body.pipe(res);
   } catch (err) {
     console.error(
