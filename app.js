@@ -7,8 +7,8 @@ import {
   handleRedirectResult,
 } from './firebase.js';
 
-const UPLOAD_API_URL = 'https://change-me.example.com/upload';
-const UPLOAD_FEATURE_ENABLED = false;
+const UPLOAD_API_URL = 'https://chat.misted.vps.totolol24.ovh/upload';
+const UPLOAD_FEATURE_ENABLED = true;
 const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
 
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];

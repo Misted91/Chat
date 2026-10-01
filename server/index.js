@@ -37,7 +37,7 @@ const s3 = MEGA_CONFIGURED
         accessKeyId: MEGA_S4_ACCESS_KEY,
         secretAccessKey: MEGA_S4_SECRET_KEY,
       },
-      forcePathStyle: true,
+      forcePathStyle: process.env.MEGA_S4_FORCE_PATH_STYLE === 'true',
     })
   : null;
 
