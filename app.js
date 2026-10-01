@@ -462,10 +462,18 @@ function highlightLine(line, inBlock) {
     if (/[A-Za-z_]/.test(ch)) {
       const w = /^[A-Za-z_]\w*/.exec(rest.slice(i))[0];
       const after = rest.slice(i + w.length);
+      const q = after[0];
+      if (/^(u8|u|U|L|R)$/.test(w) && (q === '"' || q === "'")) {
+        let j = i + w.length + 1;
+        while (j < n && rest[j] !== q) { if (rest[j] === '\\') j++; j++; }
+        j = Math.min(j + 1, n);
+        html += `<span class="tok-str">${escapeHtml(rest.slice(i, j))}</span>`; i = j; continue;
+      }
       let cls = null;
       if (CODE_KW.has(w)) cls = 'tok-key';
       else if (/^\s*\(/.test(after)) cls = 'tok-fn';
-      else if (/^[A-Z]/.test(w)) cls = 'tok-type';
+      else if (/^[A-Z][A-Z0-9_]+$/.test(w)) cls = 'tok-type';
+      else if (/^[A-Z]/.test(w) && /[a-z]/.test(w)) cls = 'tok-type';
       html += cls ? `<span class="${cls}">${escapeHtml(w)}</span>` : escapeHtml(w);
       i += w.length; continue;
     }
