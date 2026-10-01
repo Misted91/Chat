@@ -8,6 +8,8 @@ import {
 } from './firebase.js';
 
 const UPLOAD_API_URL = 'https://change-me.example.com/upload';
+const UPLOAD_FEATURE_ENABLED = false;
+const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
 
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
 
@@ -118,7 +120,7 @@ const pinnedBar = document.getElementById('pinned-bar');
 const messagesEl = document.getElementById('messages');
 const composer = document.getElementById('composer');
 const messageInput = document.getElementById('message-input');
-const imageInput = document.getElementById('image-input');
+const imageInput = document.getElementById('file-input');
 const plusBtn = document.getElementById('plus-btn');
 const plusMenu = document.getElementById('plus-menu');
 const urlBtn = document.getElementById('url-btn');
@@ -1151,6 +1153,10 @@ function buildBubble(msg, pos = {}) {
     bubble.appendChild(audio);
   }
 
+  if (msg.file) {
+    bubble.appendChild(buildFileCard(msg));
+  }
+
   if (msg.text) {
     const text = document.createElement('span');
     text.className = 'text';
@@ -1261,6 +1267,38 @@ function buildBrokenImage(src) {
   refreshIcons();
   return box;
 }
+
+function buildFileCard(msg) {
+  const card = document.createElement('div');
+  card.className = 'bubble-file';
+  const icon = document.createElement('i');
+  icon.setAttribute('data-lucide', 'file');
+  icon.setAttribute('aria-hidden', 'true');
+  const info = document.createElement('div');
+  info.className = 'bubble-file__info';
+  const name = document.createElement('span');
+  name.className = 'bubble-file__name';
+  name.textContent = msg.fileName || 'Fichier';
+  const size = document.createElement('span');
+  size.className = 'bubble-file__size';
+  size.textContent = formatFileSize(msg.fileSize || 0);
+  info.appendChild(name);
+  info.appendChild(size);
+  const dl = document.createElement('a');
+  dl.className = 'bubble-file__dl';
+  dl.href = msg.file;
+  dl.download = msg.fileName || '';
+  dl.target = '_blank';
+  dl.rel = 'noopener noreferrer';
+  dl.setAttribute('aria-label', 'Télécharger');
+  dl.innerHTML = '<i data-lucide="download" aria-hidden="true"></i>';
+  card.appendChild(icon);
+  card.appendChild(info);
+  card.appendChild(dl);
+  refreshIcons();
+  return card;
+}
+
 
 function positionFloating(el, anchor, point) {
   el.hidden = false;
@@ -1661,7 +1699,7 @@ function renderPinned() {
     const text = document.createElement('span');
     text.className = 'reply-bar__text md-preview';
     if (msg.text) text.innerHTML = renderPreview(msg.text);
-    else text.textContent = msg.image ? 'Image' : msg.audio ? 'Audio' : '';
+    else text.textContent = msg.image ? 'Image' : msg.audio ? 'Audio' : msg.file ? 'Fichier' : '';
     label.appendChild(name);
     label.appendChild(text);
     label.addEventListener('click', () => scrollToMessage(msg.id));
@@ -2129,6 +2167,10 @@ function imageDims(src) {
 
 async function ingestFiles(files) {
   if (!files.length || !currentGroupId || !currentUser) return;
+  if (!UPLOAD_FEATURE_ENABLED) {
+    infoModal("L'envoi de fichiers arrive bientôt.");
+    return;
+  }
   plusBtn.classList.add('busy');
   pendingImages = [];
   try {
@@ -2141,18 +2183,31 @@ async function ingestFiles(files) {
         const durl = await blobToDataURL(f);
         if (durl.length > 900000) { toast('GIF trop lourd (max ~650 Ko).'); continue; }
         const dim = await imageDims(durl);
-        pendingImages.push({ url: durl, w: dim.w, h: dim.h });
+        pendingImages.push({ kind: 'image', url: durl, w: dim.w, h: dim.h });
         continue;
       }
-      if (!f.type.startsWith('image/')) continue;
-      const image = await compressImage(f);
-      if (image.url.length > 900000) { toast('Image trop lourde, ignorée.'); continue; }
-      pendingImages.push(image);
+      if (f.type.startsWith('image/')) {
+        const image = await compressImage(f);
+        if (image.url.length > 900000) { toast('Image trop lourde, ignorée.'); continue; }
+        pendingImages.push({ kind: 'image', ...image });
+        continue;
+      }
+      if (f.size > MAX_UPLOAD_SIZE) {
+        toast(`« ${f.name} » dépasse la taille max (${Math.round(MAX_UPLOAD_SIZE / 1024 / 1024)} Mo).`);
+        continue;
+      }
+      pendingImages.push({
+        kind: 'file',
+        file: f,
+        name: f.name || 'fichier',
+        size: f.size,
+        type: f.type || 'application/octet-stream',
+      });
     }
     if (!pendingImages.length) return;
     openImagePreview();
   } catch (err) {
-    toast("Impossible de préparer l'image : " + err.message);
+    toast("Impossible de préparer le fichier : " + err.message);
   } finally {
     plusBtn.classList.remove('busy');
   }
@@ -2189,29 +2244,56 @@ function renderPreviewThumbs() {
   previewThumbs.innerHTML = '';
   pendingImages.forEach((item, i) => {
     const wrap = document.createElement('div');
-    wrap.className = 'preview-thumb';
-    const im = document.createElement('img');
-    im.width = 96;
-    im.height = 96;
-    im.src = item.url;
-    im.alt = '';
+    wrap.className = item.kind === 'file' ? 'preview-thumb preview-thumb--file' : 'preview-thumb';
+    if (item.kind === 'file') {
+      const icon = document.createElement('i');
+      icon.setAttribute('data-lucide', 'file');
+      icon.setAttribute('aria-hidden', 'true');
+      const info = document.createElement('div');
+      info.className = 'preview-thumb__info';
+      const name = document.createElement('span');
+      name.className = 'preview-thumb__name';
+      name.textContent = item.name;
+      const size = document.createElement('span');
+      size.className = 'preview-thumb__size';
+      size.textContent = formatFileSize(item.size);
+      info.appendChild(name);
+      info.appendChild(size);
+      wrap.appendChild(icon);
+      wrap.appendChild(info);
+    } else {
+      const im = document.createElement('img');
+      im.width = 96;
+      im.height = 96;
+      im.src = item.url;
+      im.alt = '';
+      wrap.appendChild(im);
+    }
     const rm = document.createElement('button');
     rm.type = 'button';
     rm.className = 'preview-thumb__rm';
-    rm.setAttribute('aria-label', 'Retirer cette image');
+    rm.setAttribute('aria-label', 'Retirer');
     rm.innerHTML = '<i data-lucide="x" aria-hidden="true"></i>';
     rm.addEventListener('click', () => {
       pendingImages.splice(i, 1);
       if (!pendingImages.length) { closePreview(); return; }
       renderPreviewThumbs();
     });
-    wrap.appendChild(im);
     wrap.appendChild(rm);
     previewThumbs.appendChild(wrap);
   });
-  const totalKb = Math.round(pendingImages.reduce((a, s) => a + s.url.length * 0.75, 0) / 1024);
-  previewSize.textContent = `${pendingImages.length} image(s) · ~${totalKb} Ko`;
+  const totalBytes = pendingImages.reduce(
+    (a, s) => a + (s.kind === 'file' ? s.size : s.url.length * 0.75),
+    0
+  );
+  previewSize.textContent = `${pendingImages.length} fichier(s) · ~${formatFileSize(totalBytes)}`;
   refreshIcons();
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${Math.round(bytes)} o`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} Ko`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} Mo`;
 }
 
 function closePreview() {
@@ -2225,8 +2307,7 @@ previewOverlay.addEventListener('click', (e) => {
   if (e.target === previewOverlay) closePreview();
 });
 
-async function uploadToMega(dataUrl, filename) {
-  const blob = await (await fetch(dataUrl)).blob();
+async function uploadToMega(blob, filename) {
   const token = currentUser && (await currentUser.getIdToken());
   const fd = new FormData();
   fd.append('file', blob, filename);
@@ -2246,7 +2327,7 @@ previewSend.addEventListener('click', async () => {
     toast(isMutedIn(currentGroup()) ? 'Tu es muet dans ce groupe.' : 'Le chat est bloqué.');
     return;
   }
-  const imgs = pendingImages.slice();
+  const items = pendingImages.slice();
   const text = messageInput.value.trim();
   if (findProfanity(text)) { toast('Message bloqué : langage inapproprié.', 'error'); return; }
   const reply = replyingTo;
@@ -2254,17 +2335,33 @@ previewSend.addEventListener('click', async () => {
   closePreview();
   plusBtn.classList.add('busy');
   try {
-    for (let i = 0; i < imgs.length; i++) {
-      const url = await uploadToMega(imgs[i].url, `image-${Date.now()}-${i}.webp`);
-      await Store.addMessage(currentGroupId, {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const base = {
         text: i === 0 ? text : '',
-        image: url,
-        imgW: imgs[i].w || 0,
-        imgH: imgs[i].h || 0,
         user: currentUser,
         reply: i === 0 ? reply : null,
         mentions: i === 0 ? mentions : [],
-      });
+      };
+      if (item.kind === 'file') {
+        const url = await uploadToMega(item.file, item.name);
+        await Store.addMessage(currentGroupId, {
+          ...base,
+          file: url,
+          fileName: item.name,
+          fileSize: item.size,
+          fileType: item.type,
+        });
+      } else {
+        const blob = await (await fetch(item.url)).blob();
+        const url = await uploadToMega(blob, `image-${Date.now()}-${i}.webp`);
+        await Store.addMessage(currentGroupId, {
+          ...base,
+          image: url,
+          imgW: item.w || 0,
+          imgH: item.h || 0,
+        });
+      }
     }
     messageInput.value = '';
     mentionEnabled = true;
@@ -2272,7 +2369,7 @@ previewSend.addEventListener('click', async () => {
     clearReply();
     messagesEl.scrollTop = messagesEl.scrollHeight;
   } catch (err) {
-    toast("Impossible d'envoyer l'image : " + err.message);
+    toast("Impossible d'envoyer le fichier : " + err.message);
   } finally {
     plusBtn.classList.remove('busy');
   }
@@ -2537,7 +2634,7 @@ function setReply(msg) {
     id: msg.id,
     uid: msg.author,
     name: msg.authorName || 'Anonyme',
-    text: (msg.text || (msg.image ? 'Image' : msg.audio ? 'Audio' : '')).slice(0, 140),
+    text: (msg.text || (msg.image ? 'Image' : msg.audio ? 'Audio' : msg.file ? 'Fichier' : '')).slice(0, 140),
   };
   replyMention = true;
   updateReplyMentionBtn();

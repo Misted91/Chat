@@ -108,11 +108,15 @@ service cloud.firestore {
             'text', 'image', 'audio', 'author', 'authorName', 'authorPhoto',
             'ts', 'reactions', 'pinned', 'system', 'type', 'question',
             'pollOptions', 'pollVotes', 'replyTo', 'replyToName', 'replyToText',
-            'mentions', 'edited', 'imgW', 'imgH'
+            'mentions', 'edited', 'imgW', 'imgH', 'file', 'fileName', 'fileSize', 'fileType'
           ])
           && d.text is string && d.text.size() <= 4000
           && (!('image' in d) || (d.image is string && d.image.size() <= 1000000))
-          && (!('audio' in d) || (d.audio is string && d.audio.size() <= 1000000));
+          && (!('audio' in d) || (d.audio is string && d.audio.size() <= 1000000))
+          && (!('file' in d) || (d.file is string && d.file.size() <= 1000000))
+          && (!('fileName' in d) || (d.fileName is string && d.fileName.size() <= 300))
+          && (!('fileSize' in d) || (d.fileSize is int && d.fileSize <= 20000000))
+          && (!('fileType' in d) || (d.fileType is string && d.fileType.size() <= 150));
       }
 
       function editByAuthor() {

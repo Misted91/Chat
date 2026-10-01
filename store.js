@@ -120,7 +120,7 @@ export const Store = {
     return deleteDoc(doc(db, 'groups', groupId));
   },
 
-  async addMessage(groupId, { text = '', image = '', imgW = 0, imgH = 0, audio = '', user, reply = null, mentions = [] }) {
+  async addMessage(groupId, { text = '', image = '', imgW = 0, imgH = 0, audio = '', file = '', fileName = '', fileSize = 0, fileType = '', user, reply = null, mentions = [] }) {
     const data = {
       text: text.trim(),
       image,
@@ -134,6 +134,12 @@ export const Store = {
       mentions,
     };
     if (image && imgW && imgH) { data.imgW = imgW; data.imgH = imgH; }
+    if (file) {
+      data.file = file;
+      data.fileName = fileName;
+      data.fileSize = fileSize;
+      data.fileType = fileType;
+    }
     if (reply) {
       data.replyTo = reply.id;
       data.replyToName = reply.name;

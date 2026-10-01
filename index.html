@@ -120,14 +120,14 @@
       <div class="slow-hint" id="slow-hint" hidden></div>
 
       <form class="composer" id="composer" hidden>
-        <input type="file" id="image-input" name="image-input" accept="image/*,.gif,.heic,.heif" multiple hidden />
+        <input type="file" id="file-input" name="file-input" multiple hidden />
         <div class="plus-wrap">
-          <button class="attach plus-btn" id="plus-btn" type="button" title="Ajouter" aria-label="Ajouter un média">
+          <button class="attach plus-btn" id="plus-btn" type="button" title="Ajouter" aria-label="Ajouter un fichier">
             <i data-lucide="plus" aria-hidden="true"></i>
           </button>
           <div class="plus-menu" id="plus-menu" hidden>
-            <label class="plus-item" for="image-input">
-              <i data-lucide="image" aria-hidden="true"></i><span>Image(s)</span>
+            <label class="plus-item" for="file-input">
+              <i data-lucide="paperclip" aria-hidden="true"></i><span>Fichier(s)</span>
             </label>
             <button class="plus-item" id="url-btn" type="button">
               <i data-lucide="link" aria-hidden="true"></i><span>Média par URL</span>
@@ -348,7 +348,7 @@
   <div class="modal-overlay" id="preview-overlay" hidden>
     <div class="modal preview-modal">
       <header class="modal__head">
-        <h3>Envoyer l'image</h3>
+        <h3 id="preview-title">Envoyer</h3>
         <button class="modal__close" id="preview-close" type="button" aria-label="Fermer">
           <i data-lucide="x" aria-hidden="true"></i>
         </button>

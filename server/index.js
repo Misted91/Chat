@@ -18,28 +18,28 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '')
   .filter(Boolean);
 const MAX_FILE_SIZE = Number(process.env.MAX_FILE_SIZE_BYTES || 15 * 1024 * 1024);
 
-if (!MEGA_S4_ENDPOINT || !MEGA_S4_ACCESS_KEY || !MEGA_S4_SECRET_KEY || !MEGA_S4_BUCKET) {
-  console.error(
-    'MEGA_S4_ENDPOINT, MEGA_S4_ACCESS_KEY, MEGA_S4_SECRET_KEY et MEGA_S4_BUCKET sont requis.'
+const MEGA_CONFIGURED = Boolean(
+  MEGA_S4_ENDPOINT && MEGA_S4_ACCESS_KEY && MEGA_S4_SECRET_KEY && MEGA_S4_BUCKET && PUBLIC_BASE_URL
+);
+if (!MEGA_CONFIGURED) {
+  console.warn(
+    'Mega S4 non configuré (MEGA_S4_ENDPOINT/MEGA_S4_ACCESS_KEY/MEGA_S4_SECRET_KEY/MEGA_S4_BUCKET/PUBLIC_BASE_URL manquants) : /upload et /file répondront 503.'
   );
-  process.exit(1);
-}
-if (!PUBLIC_BASE_URL) {
-  console.error('PUBLIC_BASE_URL est requis (URL publique de ce service).');
-  process.exit(1);
 }
 
 admin.initializeApp({ projectId: FIREBASE_PROJECT_ID });
 
-const s3 = new S3Client({
-  endpoint: MEGA_S4_ENDPOINT,
-  region: MEGA_S4_REGION,
-  credentials: {
-    accessKeyId: MEGA_S4_ACCESS_KEY,
-    secretAccessKey: MEGA_S4_SECRET_KEY,
-  },
-  forcePathStyle: true,
-});
+const s3 = MEGA_CONFIGURED
+  ? new S3Client({
+      endpoint: MEGA_S4_ENDPOINT,
+      region: MEGA_S4_REGION,
+      credentials: {
+        accessKeyId: MEGA_S4_ACCESS_KEY,
+        secretAccessKey: MEGA_S4_SECRET_KEY,
+      },
+      forcePathStyle: true,
+    })
+  : null;
 
 const app = express();
 app.use(
@@ -68,6 +68,7 @@ async function verifyAuth(req, res, next) {
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 app.post('/upload', verifyAuth, upload.single('file'), async (req, res) => {
+  if (!MEGA_CONFIGURED) return res.status(503).json({ error: "Service d'upload non configuré." });
   if (!req.file) return res.status(400).json({ error: 'Aucun fichier reçu.' });
   const safeName = `${Date.now()}-${Math.random().toString(36).slice(2)}-${(req.file.originalname || 'fichier').replace(/[\\/]/g, '_')}`;
   try {
@@ -92,6 +93,7 @@ app.post('/upload', verifyAuth, upload.single('file'), async (req, res) => {
 });
 
 app.get('/file/:key', async (req, res) => {
+  if (!MEGA_CONFIGURED) return res.status(503).json({ error: "Service d'upload non configuré." });
   try {
     const obj = await s3.send(
       new GetObjectCommand({ Bucket: MEGA_S4_BUCKET, Key: req.params.key })
