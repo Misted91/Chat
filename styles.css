@@ -413,7 +413,8 @@ html, body {
   opacity: 0;
   transition: opacity .12s;
 }
-.bubble:hover .meta-time { opacity: 1; }
+.bubble:hover .meta-time,
+.bubble:focus-within .meta-time { opacity: 1; }
 .msg-menu {
   position: absolute;
   top: 22px;

@@ -1576,7 +1576,7 @@ function messageDate(msg) {
 const GROUP_GAP_MS = 10 * 60 * 1000;
 
 function isSameGroup(previous, message) {
-  if (!previous || previous.system || message.system) return false;
+  if (!previous || !message || previous.system || message.system) return false;
   if (previous.author !== message.author) return false;
   const previousDate = messageDate(previous);
   const date = messageDate(message);
