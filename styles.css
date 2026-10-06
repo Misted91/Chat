@@ -413,12 +413,6 @@ html, body {
 }
 .bubble:hover .msg-menu-btn { opacity: 1; }
 .msg-menu-btn:hover { background: rgba(0, 0, 0, .25); color: var(--text); }
-.meta-time {
-  opacity: 0;
-  transition: opacity .12s;
-}
-.bubble:hover .meta-time,
-.bubble:focus-within .meta-time { opacity: 1; }
 .msg-menu {
   position: absolute;
   top: 22px;
@@ -461,7 +455,6 @@ html, body {
 
 @media (hover: none) {
   .msg-menu-btn { opacity: .6; }
-  .meta-time { opacity: .6; }
 }
 
 .chat__head {
@@ -581,7 +574,12 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
 .date-divider::after {
   content: '';
   flex: 1;
-  border-top: 1px dashed var(--border);
+  border-top: 1px solid;
+    border-image: linear-gradient(to right, transparent, var(--border)) 1;
+}
+
+.date-divider::after {
+  border-image: linear-gradient(to left, transparent, var(--border)) 1;
 }
 
 .msg-row {
@@ -753,9 +751,10 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   width: fit-content;
   overflow: hidden;
 }
-.bubble--img, .bubble--code { padding-left: 0; padding-right: 0; padding-bottom: 0; }
-.bubble--img .meta, .bubble--code .meta { padding: 0 13px; }
-.bubble--img .reply-quote, .bubble--code .reply-quote { margin-left: 13px; margin-right: 13px; }
+.bubble--img, .bubble--code, .bubble--file { padding-left: 0; padding-right: 0; padding-bottom: 0; }
+.bubble--img .meta, .bubble--code .meta, .bubble--file .meta { padding: 0 13px; }
+.bubble--img .reply-quote, .bubble--code .reply-quote, .bubble--file .reply-quote { margin-left: 13px; margin-right: 13px; }
+.bubble--file .bubble-file { max-width: none; min-width: 220px; margin-top: 6px; border-radius: 0; }
 .bubble--img .bubble-img {
   display: block;
   width: 100%;
@@ -776,8 +775,6 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
 .msg-row:not(.me) .bubble.grp-bot { border-top-left-radius: var(--grp-radius); border-bottom-left-radius: var(--grp-radius); }
 .msg-row.me .bubble.grp-top { border-top-right-radius: var(--grp-radius); }
 .msg-row.me .bubble.grp-bot { border-top-right-radius: var(--grp-radius); border-bottom-right-radius: var(--grp-radius); }
-.msg-row:not(.me) .bubble.grp-first { border-top-left-radius: 0; }
-.msg-row.me .bubble.grp-first { border-top-right-radius: 0; }
 
 .chat-empty {
   align-self: center;

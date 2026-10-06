@@ -1075,26 +1075,12 @@ function buildBubble(msg, pos = {}) {
   const meta = document.createElement('span');
   meta.className = 'meta';
   const date = msg.ts && msg.ts.toDate ? msg.ts.toDate() : new Date();
-  const timeEl = document.createElement('span');
-  timeEl.className = 'msg-time';
-  timeEl.dataset.ms = date.getTime();
-  timeEl.title = date.toLocaleString('fr-FR');
-  timeEl.textContent = relativeTime(date);
+  bubble.title = date.toLocaleString('fr-FR');
   if (showId) {
     const who = document.createElement('span');
     who.textContent = msg.authorName || 'Anonyme';
     meta.appendChild(who);
   }
-  const timeWrap = document.createElement('span');
-  timeWrap.className = 'meta-time';
-  if (showId) {
-    const sep = document.createElement('span');
-    sep.textContent = ' · ';
-    sep.setAttribute('aria-hidden', 'true');
-    timeWrap.appendChild(sep);
-  }
-  timeWrap.appendChild(timeEl);
-  meta.appendChild(timeWrap);
   if (msg.edited) {
     const ed = document.createElement('span');
     ed.className = 'msg-edited';
@@ -1108,7 +1094,7 @@ function buildBubble(msg, pos = {}) {
     pinIcon.className = 'meta-pin';
     meta.appendChild(pinIcon);
   }
-  bubble.appendChild(meta);
+  if (meta.childNodes.length) bubble.appendChild(meta);
 
   if (msg.replyTo) {
     const quote = document.createElement('button');
@@ -1169,6 +1155,7 @@ function buildBubble(msg, pos = {}) {
 
   if (msg.file) {
     bubble.appendChild(buildFileCard(msg));
+    if (!msg.text && !msg.image && msg.type !== 'poll' && !msg.audio) bubble.classList.add('bubble--file');
   }
 
   if (msg.text) {
