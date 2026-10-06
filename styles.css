@@ -13,6 +13,7 @@
   --msg-gap: 30px;
   --sys-gap: 8px;
   --grp-gap: 5px;
+  --grp-radius: 5px;
 }
 
 * { box-sizing: border-box; }
@@ -769,12 +770,12 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   background: var(--bubble-me);
   color: white;
 }
-.msg-avatar.spacer { background: transparent; }
+.msg-avatar.spacer { background-color: transparent; }
 .msg-row.grp-cont { margin-top: calc(var(--grp-gap) - var(--msg-gap)); }
-.msg-row:not(.me) .bubble.grp-top { border-top-left-radius: 5px; }
-.msg-row:not(.me) .bubble.grp-bot { border-top-left-radius: 5px; border-bottom-left-radius: 5px; }
-.msg-row.me .bubble.grp-top { border-top-right-radius: 5px; }
-.msg-row.me .bubble.grp-bot { border-top-right-radius: 5px; border-bottom-right-radius: 5px; }
+.msg-row:not(.me) .bubble.grp-top { border-top-left-radius: var(--grp-radius); }
+.msg-row:not(.me) .bubble.grp-bot { border-top-left-radius: var(--grp-radius); border-bottom-left-radius: var(--grp-radius); }
+.msg-row.me .bubble.grp-top { border-top-right-radius: var(--grp-radius); }
+.msg-row.me .bubble.grp-bot { border-top-right-radius: var(--grp-radius); border-bottom-right-radius: var(--grp-radius); }
 .msg-row:not(.me) .bubble.grp-first { border-top-left-radius: 0; }
 .msg-row.me .bubble.grp-first { border-top-right-radius: 0; }
 
