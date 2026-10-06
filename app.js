@@ -1063,12 +1063,12 @@ function buildBubble(msg, pos = {}) {
   }
   row.appendChild(avatar);
 
-  const isGroupTop = !first;
-  const isGroupBottom = !last || (first && last);
-  const isGroupFirst = first && !last;
+  const connectTop = !first;
+  const connectBottom = !last || (first && last);
+  const startsStack = first && !last;
   const bubble = document.createElement('div');
   bubble.className = ['bubble', isMe && 'me', msg.pinned && 'pinned',
-    isGroupTop && 'grp-top', isGroupBottom && 'grp-bot', isGroupFirst && 'grp-first']
+    connectTop && 'grp-top', connectBottom && 'grp-bot', startsStack && 'grp-first']
     .filter(Boolean).join(' ');
   bubble.dataset.id = msg.id;
 
