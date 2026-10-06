@@ -1063,10 +1063,13 @@ function buildBubble(msg, pos = {}) {
   }
   row.appendChild(avatar);
 
+  const isGroupTop = !first;
+  const isGroupBottom = !last || (first && last);
+  const isGroupFirst = first && !last;
   const bubble = document.createElement('div');
-  bubble.className = 'bubble' + (isMe ? ' me' : '') + (msg.pinned ? ' pinned' : '')
-    + (first ? '' : ' grp-top') + (!last || (first && last) ? ' grp-bot' : '')
-    + (first && !last ? ' grp-first' : '');
+  bubble.className = ['bubble', isMe && 'me', msg.pinned && 'pinned',
+    isGroupTop && 'grp-top', isGroupBottom && 'grp-bot', isGroupFirst && 'grp-first']
+    .filter(Boolean).join(' ');
   bubble.dataset.id = msg.id;
 
   const meta = document.createElement('span');

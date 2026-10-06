@@ -10,6 +10,8 @@
   --danger: #e0555b;
   --bubble-me: #3f6be0;
   --bubble-other: #262b36;
+  --msg-gap: 30px;
+  --sys-gap: 8px;
 }
 
 * { box-sizing: border-box; }
@@ -558,7 +560,7 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 30px;
+  gap: var(--msg-gap);
 }
 
 .date-divider {
@@ -1174,7 +1176,7 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
 }
 .system-toggle:hover { background: var(--panel-2); }
 .system-msg + .system-msg,
-.system-toggle + .system-msg { margin-top: -22px; }
+.system-toggle + .system-msg { margin-top: calc(var(--sys-gap) - var(--msg-gap)); }
 
 .typing {
   position: absolute;
