@@ -1078,10 +1078,19 @@ function buildBubble(msg, pos = {}) {
   timeEl.textContent = relativeTime(date);
   if (showId) {
     const who = document.createElement('span');
-    who.textContent = `${msg.authorName || 'Anonyme'} · `;
+    who.textContent = msg.authorName || 'Anonyme';
     meta.appendChild(who);
   }
-  meta.appendChild(timeEl);
+  const timeWrap = document.createElement('span');
+  timeWrap.className = 'meta-time';
+  if (showId) {
+    const sep = document.createElement('span');
+    sep.textContent = ' · ';
+    sep.setAttribute('aria-hidden', 'true');
+    timeWrap.appendChild(sep);
+  }
+  timeWrap.appendChild(timeEl);
+  meta.appendChild(timeWrap);
   if (msg.edited) {
     const ed = document.createElement('span');
     ed.className = 'msg-edited';
@@ -1564,28 +1573,32 @@ function messageDate(msg) {
   return msg.ts && typeof msg.ts.toDate === 'function' ? msg.ts.toDate() : null;
 }
 
-function appendMessageDivider(previous, message) {
+const GROUP_GAP_MS = 10 * 60 * 1000;
+
+function isSameGroup(previous, message) {
+  if (!previous || previous.system || message.system) return false;
+  if (previous.author !== message.author) return false;
+  const previousDate = messageDate(previous);
+  const date = messageDate(message);
+  if (!previousDate || !date) return true;
+  return date.getTime() - previousDate.getTime() < GROUP_GAP_MS;
+}
+
+function appendDateDivider(previous, message) {
   if (!previous) return;
   const previousDate = messageDate(previous);
   const date = messageDate(message);
   if (!previousDate || !date) return;
-
-  const changedDate = previousDate.toDateString() !== date.toDateString();
-  const gap = date.getTime() - previousDate.getTime() >= 10 * 60 * 1000;
-  if (!changedDate && !gap) return;
+  if (previousDate.toDateString() === date.toDateString()) return;
 
   const divider = document.createElement('div');
-  divider.className = 'message-divider' + (changedDate ? ' message-divider--date' : '');
+  divider.className = 'date-divider';
   divider.setAttribute('role', 'separator');
-  if (changedDate) {
-    const label = date.toLocaleDateString('fr-FR', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-    });
-    divider.textContent = label;
-    divider.setAttribute('aria-label', `Changement de date : ${label}`);
-  } else {
-    divider.setAttribute('aria-label', 'Écart d’au moins 10 minutes');
-  }
+  const label = date.toLocaleDateString('fr-FR', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+  divider.textContent = label;
+  divider.setAttribute('aria-label', `Changement de date : ${label}`);
   messagesEl.appendChild(divider);
 }
 
@@ -1609,7 +1622,7 @@ function appendSystemRun(run, startIndex) {
   }
   const shown = run.slice(start);
   shown.forEach((m, index) => {
-    appendMessageDivider(currentMessages[startIndex + start + index - 1], m);
+    appendDateDivider(currentMessages[startIndex + start + index - 1], m);
     messagesEl.appendChild(buildBubble(m));
   });
 }
@@ -1635,9 +1648,9 @@ function renderMessages() {
     } else {
       const prev = currentMessages[i - 1];
       const next = currentMessages[i + 1];
-      const first = !prev || prev.system || prev.author !== currentMessages[i].author;
-      const last = !next || next.system || next.author !== currentMessages[i].author;
-      appendMessageDivider(prev, currentMessages[i]);
+      const first = !isSameGroup(prev, currentMessages[i]);
+      const last = !isSameGroup(currentMessages[i], next);
+      appendDateDivider(prev, currentMessages[i]);
       messagesEl.appendChild(buildBubble(currentMessages[i], { first, last }));
       i++;
     }
