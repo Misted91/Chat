@@ -574,7 +574,12 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
 .date-divider::after {
   content: '';
   flex: 1;
-  border-top: 1px dashed var(--border);
+  border-top: 1px solid;
+    border-image: linear-gradient(to right, transparent, var(--border)) 1;
+}
+
+.date-divider::after {
+  border-image: linear-gradient(to left, transparent, var(--border)) 1;
 }
 
 .msg-row {
