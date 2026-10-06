@@ -554,6 +554,25 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   gap: 30px;
 }
 
+.message-divider {
+  width: 100%;
+  min-height: 1px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: center;
+}
+.message-divider::before,
+.message-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px dashed var(--border);
+}
+.message-divider--date { min-height: 16px; }
+
 .msg-row {
   display: flex;
   gap: 8px;

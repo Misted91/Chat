@@ -1560,26 +1560,58 @@ function loadMoreMessages() {
   subscribeMessages(currentGroupId);
 }
 
-function appendSystemRun(run) {
-  if (run.length <= 3) {
-    run.forEach((m) => messagesEl.appendChild(buildBubble(m)));
-    return;
+function messageDate(msg) {
+  return msg.ts && typeof msg.ts.toDate === 'function' ? msg.ts.toDate() : null;
+}
+
+function appendMessageDivider(previous, message) {
+  if (!previous) return;
+  const previousDate = messageDate(previous);
+  const date = messageDate(message);
+  if (!previousDate || !date) return;
+
+  const changedDate = previousDate.toDateString() !== date.toDateString();
+  const gap = date.getTime() - previousDate.getTime() >= 10 * 60 * 1000;
+  if (!changedDate && !gap) return;
+
+  const divider = document.createElement('div');
+  divider.className = 'message-divider' + (changedDate ? ' message-divider--date' : '');
+  divider.setAttribute('role', 'separator');
+  if (changedDate) {
+    const label = date.toLocaleDateString('fr-FR', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    });
+    divider.textContent = label;
+    divider.setAttribute('aria-label', `Changement de date : ${label}`);
+  } else {
+    divider.setAttribute('aria-label', 'Écart d’au moins 10 minutes');
   }
-  const key = run[0].id;
-  const expanded = expandedSys.has(key);
-  const toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.className = 'system-toggle';
-  toggle.textContent = expanded
-    ? 'Voir moins'
-    : `Voir ${run.length - 3} message${run.length - 3 > 1 ? 's' : ''} de plus`;
-  toggle.addEventListener('click', () => {
-    if (expanded) expandedSys.delete(key); else expandedSys.add(key);
-    renderMessages();
+  messagesEl.appendChild(divider);
+}
+
+function appendSystemRun(run, startIndex) {
+  let start = 0;
+  if (run.length > 3) {
+    const key = run[0].id;
+    const expanded = expandedSys.has(key);
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'system-toggle';
+    toggle.textContent = expanded
+      ? 'Voir moins'
+      : `Voir ${run.length - 3} message${run.length - 3 > 1 ? 's' : ''} de plus`;
+    toggle.addEventListener('click', () => {
+      if (expanded) expandedSys.delete(key); else expandedSys.add(key);
+      renderMessages();
+    });
+    messagesEl.appendChild(toggle);
+    if (!expanded) start = run.length - 3;
+  }
+  const shown = run.slice(start);
+  shown.forEach((m, index) => {
+    appendMessageDivider(currentMessages[startIndex + start + index - 1], m);
+    messagesEl.appendChild(buildBubble(m));
   });
-  messagesEl.appendChild(toggle);
-  const shown = expanded ? run : run.slice(-3);
-  shown.forEach((m) => messagesEl.appendChild(buildBubble(m)));
 }
 
 function renderMessages() {
@@ -1598,13 +1630,14 @@ function renderMessages() {
       let j = i;
       const run = [];
       while (j < currentMessages.length && currentMessages[j].system) { run.push(currentMessages[j]); j++; }
-      appendSystemRun(run);
+      appendSystemRun(run, i);
       i = j;
     } else {
       const prev = currentMessages[i - 1];
       const next = currentMessages[i + 1];
       const first = !prev || prev.system || prev.author !== currentMessages[i].author;
       const last = !next || next.system || next.author !== currentMessages[i].author;
+      appendMessageDivider(prev, currentMessages[i]);
       messagesEl.appendChild(buildBubble(currentMessages[i], { first, last }));
       i++;
     }
