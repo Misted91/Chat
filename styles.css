@@ -409,6 +409,12 @@ html, body {
 }
 .bubble:hover .msg-menu-btn { opacity: 1; }
 .msg-menu-btn:hover { background: rgba(0, 0, 0, .25); color: var(--text); }
+.meta-time {
+  opacity: 0;
+  transition: opacity .12s;
+}
+.bubble:hover .meta-time,
+.bubble:focus-within .meta-time { opacity: 1; }
 .msg-menu {
   position: absolute;
   top: 22px;
@@ -451,6 +457,7 @@ html, body {
 
 @media (hover: none) {
   .msg-menu-btn { opacity: .6; }
+  .meta-time { opacity: .6; }
 }
 
 .chat__head {
@@ -552,6 +559,25 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   display: flex;
   flex-direction: column;
   gap: 30px;
+}
+
+.date-divider {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  text-transform: capitalize;
+}
+.date-divider::before,
+.date-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px dashed var(--border);
 }
 
 .msg-row {

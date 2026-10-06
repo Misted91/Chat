@@ -1078,10 +1078,19 @@ function buildBubble(msg, pos = {}) {
   timeEl.textContent = relativeTime(date);
   if (showId) {
     const who = document.createElement('span');
-    who.textContent = `${msg.authorName || 'Anonyme'} · `;
+    who.textContent = msg.authorName || 'Anonyme';
     meta.appendChild(who);
   }
-  meta.appendChild(timeEl);
+  const timeWrap = document.createElement('span');
+  timeWrap.className = 'meta-time';
+  if (showId) {
+    const sep = document.createElement('span');
+    sep.textContent = ' · ';
+    sep.setAttribute('aria-hidden', 'true');
+    timeWrap.appendChild(sep);
+  }
+  timeWrap.appendChild(timeEl);
+  meta.appendChild(timeWrap);
   if (msg.edited) {
     const ed = document.createElement('span');
     ed.className = 'msg-edited';
@@ -1560,26 +1569,66 @@ function loadMoreMessages() {
   subscribeMessages(currentGroupId);
 }
 
-function appendSystemRun(run) {
-  if (run.length <= 3) {
-    run.forEach((m) => messagesEl.appendChild(buildBubble(m)));
-    return;
-  }
-  const key = run[0].id;
-  const expanded = expandedSys.has(key);
-  const toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.className = 'system-toggle';
-  toggle.textContent = expanded
-    ? 'Voir moins'
-    : `Voir ${run.length - 3} message${run.length - 3 > 1 ? 's' : ''} de plus`;
-  toggle.addEventListener('click', () => {
-    if (expanded) expandedSys.delete(key); else expandedSys.add(key);
-    renderMessages();
+function messageDate(msg) {
+  return msg.ts && typeof msg.ts.toDate === 'function' ? msg.ts.toDate() : null;
+}
+
+const GROUP_GAP_MS = 10 * 60 * 1000;
+
+function isSameGroup(previous, message) {
+  if (!previous || !message || previous.system || message.system) return false;
+  if (previous.author !== message.author) return false;
+  const previousDate = messageDate(previous);
+  const date = messageDate(message);
+  if (!previousDate || !date) return true;
+  if (previousDate.toDateString() !== date.toDateString()) return false;
+  return date.getTime() - previousDate.getTime() < GROUP_GAP_MS;
+}
+
+function appendDateDivider(previous, message) {
+  if (!previous) return;
+  const previousDate = messageDate(previous);
+  const date = messageDate(message);
+  if (!previousDate || !date) return;
+  if (previousDate.toDateString() === date.toDateString()) return;
+
+  const divider = document.createElement('div');
+  divider.className = 'date-divider';
+  divider.setAttribute('role', 'separator');
+  const label = date.toLocaleDateString('fr-FR', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   });
-  messagesEl.appendChild(toggle);
-  const shown = expanded ? run : run.slice(-3);
-  shown.forEach((m) => messagesEl.appendChild(buildBubble(m)));
+  divider.textContent = label;
+  divider.setAttribute('aria-label', `Changement de date : ${label}`);
+  messagesEl.appendChild(divider);
+}
+
+function appendSystemRun(run, previousShown) {
+  let start = 0;
+  if (run.length > 3) {
+    const key = run[0].id;
+    const expanded = expandedSys.has(key);
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'system-toggle';
+    toggle.textContent = expanded
+      ? 'Voir moins'
+      : `Voir ${run.length - 3} message${run.length - 3 > 1 ? 's' : ''} de plus`;
+    toggle.addEventListener('click', () => {
+      if (expanded) expandedSys.delete(key); else expandedSys.add(key);
+      renderMessages();
+    });
+    messagesEl.appendChild(toggle);
+    if (!expanded) start = run.length - 3;
+  }
+  const shown = run.slice(start);
+  let previous = previousShown;
+  shown.forEach((m) => {
+    appendDateDivider(previous, m);
+    messagesEl.appendChild(buildBubble(m));
+    previous = m;
+  });
+  return previous;
 }
 
 function renderMessages() {
@@ -1593,19 +1642,22 @@ function renderMessages() {
     messagesEl.appendChild(buildIcebreaker());
   }
   let i = 0;
+  let lastShown = null;
   while (i < currentMessages.length) {
     if (currentMessages[i].system) {
       let j = i;
       const run = [];
       while (j < currentMessages.length && currentMessages[j].system) { run.push(currentMessages[j]); j++; }
-      appendSystemRun(run);
+      lastShown = appendSystemRun(run, lastShown);
       i = j;
     } else {
       const prev = currentMessages[i - 1];
       const next = currentMessages[i + 1];
-      const first = !prev || prev.system || prev.author !== currentMessages[i].author;
-      const last = !next || next.system || next.author !== currentMessages[i].author;
+      const first = !isSameGroup(prev, currentMessages[i]);
+      const last = !isSameGroup(currentMessages[i], next);
+      appendDateDivider(lastShown, currentMessages[i]);
       messagesEl.appendChild(buildBubble(currentMessages[i], { first, last }));
+      lastShown = currentMessages[i];
       i++;
     }
   }
