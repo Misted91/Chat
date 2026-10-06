@@ -1063,9 +1063,13 @@ function buildBubble(msg, pos = {}) {
   }
   row.appendChild(avatar);
 
+  const connectTop = !first;
+  const connectBottom = !last || (first && last);
+  const startsStack = first && !last;
   const bubble = document.createElement('div');
-  bubble.className = 'bubble' + (isMe ? ' me' : '') + (msg.pinned ? ' pinned' : '')
-    + (first ? '' : ' grp-top') + (!last || (first && last) ? ' grp-bot' : '');
+  bubble.className = ['bubble', isMe && 'me', msg.pinned && 'pinned',
+    connectTop && 'grp-top', connectBottom && 'grp-bot', startsStack && 'grp-first']
+    .filter(Boolean).join(' ');
   bubble.dataset.id = msg.id;
 
   const meta = document.createElement('span');
