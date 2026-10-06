@@ -1581,6 +1581,7 @@ function isSameGroup(previous, message) {
   const previousDate = messageDate(previous);
   const date = messageDate(message);
   if (!previousDate || !date) return true;
+  if (previousDate.toDateString() !== date.toDateString()) return false;
   return date.getTime() - previousDate.getTime() < GROUP_GAP_MS;
 }
 
@@ -1602,7 +1603,7 @@ function appendDateDivider(previous, message) {
   messagesEl.appendChild(divider);
 }
 
-function appendSystemRun(run, startIndex) {
+function appendSystemRun(run, previousShown) {
   let start = 0;
   if (run.length > 3) {
     const key = run[0].id;
@@ -1621,10 +1622,13 @@ function appendSystemRun(run, startIndex) {
     if (!expanded) start = run.length - 3;
   }
   const shown = run.slice(start);
-  shown.forEach((m, index) => {
-    appendDateDivider(currentMessages[startIndex + start + index - 1], m);
+  let previous = previousShown;
+  shown.forEach((m) => {
+    appendDateDivider(previous, m);
     messagesEl.appendChild(buildBubble(m));
+    previous = m;
   });
+  return previous;
 }
 
 function renderMessages() {
@@ -1638,20 +1642,22 @@ function renderMessages() {
     messagesEl.appendChild(buildIcebreaker());
   }
   let i = 0;
+  let lastShown = null;
   while (i < currentMessages.length) {
     if (currentMessages[i].system) {
       let j = i;
       const run = [];
       while (j < currentMessages.length && currentMessages[j].system) { run.push(currentMessages[j]); j++; }
-      appendSystemRun(run, i);
+      lastShown = appendSystemRun(run, lastShown);
       i = j;
     } else {
       const prev = currentMessages[i - 1];
       const next = currentMessages[i + 1];
       const first = !isSameGroup(prev, currentMessages[i]);
       const last = !isSameGroup(currentMessages[i], next);
-      appendDateDivider(prev, currentMessages[i]);
+      appendDateDivider(lastShown, currentMessages[i]);
       messagesEl.appendChild(buildBubble(currentMessages[i], { first, last }));
+      lastShown = currentMessages[i];
       i++;
     }
   }
