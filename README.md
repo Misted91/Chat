@@ -1,11 +1,14 @@
 # Groupes de discussion
 
 Un site pour **créer des groupes de conversation** et discuter en temps réel,
-avec **connexion Google** et données stockées dans **Firebase (Firestore)**.
+avec connexion **Google**, **GitHub** ou **e-mail et mot de passe**, et données
+stockées dans **Firebase (Firestore)**.
 
 ## Utilisation
 
-1. Connecte-toi avec Google.
+1. Connecte-toi avec Google ou GitHub, ou utilise ton e-mail et ton mot de passe.
+   Le formulaire permet aussi de créer un compte et de demander un lien de
+   réinitialisation du mot de passe.
 2. Crée un groupe (champ + bouton **+** à gauche).
 3. Ouvre un groupe, écris un message, **Envoyer** — les messages arrivent en
    temps réel pour tous les membres connectés.
@@ -15,7 +18,9 @@ avec **connexion Google** et données stockées dans **Firebase (Firestore)**.
 
 Console : <https://console.firebase.google.com> → projet **chat-fd96b**
 
-1. **Authentication → Sign-in method → Google** : activer.
+1. **Authentication → Sign-in method** : activer **Google**, **GitHub** et
+   **E-mail/Mot de passe**. Configure l’application OAuth GitHub demandée par
+   Firebase.
 2. **Firestore Database → Créer une base** (mode production).
 3. **Firestore Database → Règles** : coller le contenu de `firestore.rules`.
 4. **Authentication → Settings → Domaines autorisés** : `localhost` est déjà

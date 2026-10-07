@@ -2,7 +2,11 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/fireba
 import {
   getAuth,
   GoogleAuthProvider,
+  GithubAuthProvider,
   signInWithPopup,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   getRedirectResult,
   setPersistence,
   browserLocalPersistence,
@@ -29,11 +33,30 @@ export const db = initializeFirestore(app, {
 });
 
 const provider = new GoogleAuthProvider();
+const githubProvider = new GithubAuthProvider();
 
 export async function loginWithGoogle() {
-
   await setPersistence(auth, browserLocalPersistence);
   return signInWithPopup(auth, provider);
+}
+
+export async function loginWithGithub() {
+  await setPersistence(auth, browserLocalPersistence);
+  return signInWithPopup(auth, githubProvider);
+}
+
+export async function loginWithEmail(email, password) {
+  await setPersistence(auth, browserLocalPersistence);
+  return signInWithEmailAndPassword(auth, email, password);
+}
+
+export async function createAccountWithEmail(email, password) {
+  await setPersistence(auth, browserLocalPersistence);
+  return createUserWithEmailAndPassword(auth, email, password);
+}
+
+export function resetPasswordForEmail(email) {
+  return sendPasswordResetEmail(auth, email);
 }
 
 export function handleRedirectResult() {

@@ -2,6 +2,10 @@ import { Store } from './store.js';
 import {
   auth,
   loginWithGoogle,
+  loginWithGithub,
+  loginWithEmail,
+  createAccountWithEmail,
+  resetPasswordForEmail,
   logout,
   watchAuth,
   handleRedirectResult,
@@ -12,8 +16,7 @@ const UPLOAD_ORIGIN = new URL(UPLOAD_API_URL).origin;
 const UPLOAD_FEATURE_ENABLED = true;
 const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
 
-const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
-
+const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉', '👌', '😁', '🫠', '😭', '🤯', '😱', '🥳', '🤡', '🐒', '👀', '🔥', '❤️', '❤️‍🔥', '❌', '❔', '❓', '⚠️', '❎', '✅', '🆗', '0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟', '☑️', '✔️', '🫦', '🤦', '💪', '🤏', '👈', '👉', '☝️', '🫵', '👆', '👇', '✌️', '🤞', '🖐️', '👍', '👎', '👋', '🙏', '✨'];
 const PROFANITY = [
   'connard', 'connasse', 'salope', 'salaud', 'enculé', 'encule', 'enculer',
   'putain', 'pute', 'merde', 'batard', 'bâtard', 'nique', 'niquer', 'ntm',
@@ -89,6 +92,12 @@ const expandedSys = new Set();
 
 const loginOverlay = document.getElementById('login-overlay');
 const loginBtn = document.getElementById('login-btn');
+const githubLoginBtn = document.getElementById('github-login-btn');
+const emailLoginForm = document.getElementById('email-login-form');
+const loginEmail = document.getElementById('login-email');
+const loginPassword = document.getElementById('login-password');
+const createAccountBtn = document.getElementById('create-account-btn');
+const resetPasswordBtn = document.getElementById('reset-password-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const userName = document.getElementById('user-name');
 const userAvatar = document.getElementById('user-avatar');
@@ -403,6 +412,7 @@ function renderMarkdown(raw) {
   s = s.replace(/_([^_\n]+?)_/g, '<em>$1</em>');
   s = s.replace(/&lt;t:(\d+)(?::([tTdDfFR]))?&gt;/g, (m, sec, fmt) => formatDiscordTs(Number(sec), fmt || 'f'));
   s = s.replace(new RegExp('\\n*(' + S + 'CB\\d+' + S + ')\\n*', 'g'), '$1');
+  s = s.replace(/(<span class="md-li">[^\n]*<\/span>)\n+(?=<span class="md-li">)/g, '$1');
   s = s.replace(/\n/g, '<br>');
   s = s.replace(new RegExp(S + 'L(\\d+)' + S, 'g'), (m, i) => links[+i]);
   s = s.replace(new RegExp(S + 'IC(\\d+)' + S, 'g'), (m, i) => `<code class="md-inline">${escapeHtml(inlineCodes[+i])}</code>`);
@@ -552,9 +562,19 @@ function initials(name) {
 
 function authErrorMessage(err) {
   if (err.code === 'auth/operation-not-allowed')
-    return "La connexion Google n'est pas activée dans la console Firebase.";
+    return "Cette méthode de connexion n'est pas activée dans Firebase.";
   if (err.code === 'auth/unauthorized-domain')
     return "Ce domaine n'est pas autorisé dans Firebase.";
+  if (err.code === 'auth/email-already-in-use') return 'Cette adresse e-mail possède déjà un compte.';
+  if (err.code === 'auth/invalid-email') return "L'adresse e-mail n'est pas valide.";
+  if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found')
+    return 'Adresse e-mail ou mot de passe incorrect.';
+  if (err.code === 'auth/weak-password') return 'Le mot de passe doit contenir au moins 6 caractères.';
+  if (err.code === 'auth/account-exists-with-different-credential')
+    return 'Cette adresse utilise déjà une autre méthode de connexion.';
+  if (err.code === 'auth/popup-closed-by-user') return 'La fenêtre de connexion a été fermée.';
+  if (err.code === 'auth/popup-blocked') return 'Autorise les fenêtres popup pour terminer la connexion.';
+  if (err.code === 'auth/too-many-requests') return 'Trop de tentatives. Réessaie plus tard.';
   return err.message;
 }
 
@@ -567,6 +587,55 @@ loginBtn.addEventListener('click', async () => {
     await loginWithGoogle();
   } catch (err) {
     toast('Connexion impossible : ' + authErrorMessage(err));
+  }
+});
+
+githubLoginBtn.addEventListener('click', async () => {
+  try {
+    await loginWithGithub();
+  } catch (err) {
+    toast('Connexion impossible : ' + authErrorMessage(err));
+  }
+});
+
+emailLoginForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  try {
+    await loginWithEmail(loginEmail.value.trim(), loginPassword.value);
+  } catch (err) {
+    toast('Connexion impossible : ' + authErrorMessage(err));
+  }
+});
+
+createAccountBtn.addEventListener('click', async () => {
+  if (!emailLoginForm.reportValidity()) return;
+  try {
+    await createAccountWithEmail(loginEmail.value.trim(), loginPassword.value);
+  } catch (err) {
+    toast('Création du compte impossible : ' + authErrorMessage(err));
+  }
+});
+
+resetPasswordBtn.addEventListener('click', async () => {
+  const email = loginEmail.value.trim();
+  if (!email) {
+    toast('Saisis ton adresse e-mail pour recevoir le lien de réinitialisation.');
+    loginEmail.focus();
+    return;
+  }
+  if (!loginEmail.checkValidity()) {
+    loginEmail.reportValidity();
+    return;
+  }
+  try {
+    await resetPasswordForEmail(email);
+    toast('Si un compte correspond à cette adresse, un lien de réinitialisation a été envoyé.');
+  } catch (err) {
+    if (err.code === 'auth/user-not-found') {
+      toast('Si un compte correspond à cette adresse, un lien de réinitialisation a été envoyé.');
+      return;
+    }
+    toast('Envoi du lien impossible : ' + authErrorMessage(err));
   }
 });
 

@@ -1,4 +1,5 @@
 .firebase/
 node_modules/
 server/.env
+chat-fd96b-firebase-adminsdk-fbsvc-677fda9953.json
 /tmp
