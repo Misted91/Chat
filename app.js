@@ -823,10 +823,11 @@ loginBtn.addEventListener('click', async () => {
 let loggingOut = false;
 logoutBtn.addEventListener('click', () => {
   loggingOut = true;
-  logout().catch((err) => {
-    loggingOut = false;
-    toast('Déconnexion impossible : ' + err.message);
-  });
+  logout()
+    .catch((err) => toast('Déconnexion impossible : ' + err.message))
+    .finally(() => {
+      loggingOut = false;
+    });
 });
 
 sidebarToggle.addEventListener('click', () => {
