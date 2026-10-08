@@ -140,6 +140,7 @@ let profilePreviewUrl = null;
 let profilePromptOpen = false;
 
 const loginOverlay = document.getElementById('login-overlay');
+const loadingOverlay = document.getElementById('loading-overlay');
 const loginBtn = document.getElementById('login-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const userName = document.getElementById('user-name');
@@ -823,14 +824,17 @@ loginBtn.addEventListener('click', async () => {
 let loggingOut = false;
 logoutBtn.addEventListener('click', () => {
   loggingOut = true;
-  logout()
-    .catch((err) => toast('Déconnexion impossible : ' + err.message))
-    .finally(() => {
-      setTimeout(() => {
-        loggingOut = false;
-        if (!currentUser) loginOverlay.hidden = false;
-      }, 1500);
-    });
+  loadingOverlay.hidden = false;
+  logout().catch((err) => {
+    loggingOut = false;
+    loadingOverlay.hidden = true;
+    toast('Déconnexion impossible : ' + err.message);
+  });
+  setTimeout(() => {
+    loggingOut = false;
+    loadingOverlay.hidden = true;
+    if (!currentUser) loginOverlay.hidden = false;
+  }, 8000);
 });
 
 sidebarToggle.addEventListener('click', () => {
