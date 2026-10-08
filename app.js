@@ -346,7 +346,7 @@ function updateComposerState() {
     slowHint.hidden = false;
     slowHint.innerHTML = `<i data-lucide="timer" aria-hidden="true"></i> Mode lent actif : ${group.slowMode} s entre chaque message.`;
   } else {
-    messageInput.placeholder = 'Écris un message…  (Entrée pour envoyer, Maj+Entrée pour une ligne)';
+    messageInput.placeholder = 'Écris un message…';
   }
   refreshIcons();
 }
