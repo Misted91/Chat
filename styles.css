@@ -785,9 +785,6 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
 }
 .bubble--img, .bubble--file { padding: 0; }
 .bubble--code { padding: 0; }
-.bubble:not(.bubble--has-meta):not(.bubble--img):not(.bubble--file):not(.bubble--code) {
-  padding-top: 13px;
-}
 .bubble--img.bubble--has-meta,
 .bubble--file.bubble--has-meta,
 .bubble--code.bubble--has-meta { padding-top: 9px; }
