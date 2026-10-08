@@ -826,7 +826,10 @@ logoutBtn.addEventListener('click', () => {
   logout()
     .catch((err) => toast('Déconnexion impossible : ' + err.message))
     .finally(() => {
-      loggingOut = false;
+      setTimeout(() => {
+        loggingOut = false;
+        if (!currentUser) loginOverlay.hidden = false;
+      }, 1500);
     });
 });
 

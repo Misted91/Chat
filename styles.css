@@ -1809,3 +1809,7 @@ input[type="range"]:focus-visible::-moz-range-thumb { outline: 2px solid var(--a
   .chat__head.menu-open .chat__actions { display: flex; }
   .chat__actions .btn-ghost, .chat__actions .btn-danger { justify-content: flex-start; }
 }
+
+.group-list:empty {
+  display: none;
+}
