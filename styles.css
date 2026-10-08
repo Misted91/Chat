@@ -885,12 +885,7 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   position: relative;
   padding: 8px;
 }
-.bubble
-:not(.bubble--file)
-:not(.bubble--img)
-:not(.bubble--code)
-:not(.bubble--video)
-:not(.bubble--has-meta) .reactions {
+.bubble:not(.bubble--file):not(.bubble--img):not(.bubble--code):not(.bubble--video):not(.bubble--has-meta) .reactions {
   padding-left: 0;
   padding-right: 0;
   padding-bottom: 0;
