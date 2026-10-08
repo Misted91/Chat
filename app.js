@@ -2383,10 +2383,11 @@ async function doJoin(raw) {
   const code = (raw || '').trim();
   if (!code || !currentUser) return;
   try {
-    const groupId = await Store.joinByCode(code, currentUser);
+    const joined = await Store.joinByCode(code, currentUser);
     joinOverlay.hidden = true;
-    if (!groupId) { toast('Code invalide.'); return; }
-    selectGroup(groupId);
+    if (!joined) { toast('Code invalide.'); return; }
+    if (joined.already) toast('Tu es déjà dans ce groupe.');
+    selectGroup(joined.groupId);
   } catch (err) {
     toast('Impossible de rejoindre : ' + err.message);
   }

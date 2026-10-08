@@ -281,13 +281,17 @@ export const Store = {
     const inviteSnap = await getDoc(doc(db, 'invites', clean));
     if (!inviteSnap.exists()) return null;
     const { groupId } = inviteSnap.data();
+    const existing = await this.getGroup(groupId).catch(() => null);
+    if (existing && (existing.memberUids || []).includes(user.uid)) {
+      return { groupId, already: true };
+    }
     await this.joinGroup(groupId, user);
     await this.addSystemMessage(
       groupId,
       `${user.displayName || 'Quelqu’un'} a rejoint le groupe`,
       user
     ).catch(() => {});
-    return groupId;
+    return { groupId, already: false };
   },
 
   async toggleReaction(groupId, message, emoji, uid) {
