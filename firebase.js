@@ -44,8 +44,11 @@ export function handleRedirectResult() {
   return getRedirectResult(auth);
 }
 
-export function logout() {
-  return signOut(auth);
+const SSO_END_SESSION_URL = 'https://sso.vps.totolol24.ovh/application/o/chat/end-session/';
+
+export async function logout() {
+  await signOut(auth);
+  window.location.assign(SSO_END_SESSION_URL);
 }
 
 export function updateUserProfile(profile) {
