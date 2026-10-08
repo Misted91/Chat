@@ -36,6 +36,7 @@ ssoProvider.addScope('profile');
 ssoProvider.addScope('email');
 
 const SSO_ID_TOKEN_KEY = 'sso-id-token';
+const SSO_CLIENT_ID = 'kPKnDXMtb2iX2WUvqYGVocGA9W4eUCHNgnVKJNC6';
 
 export async function loginWithSso() {
   await setPersistence(auth, browserLocalPersistence);
@@ -49,16 +50,18 @@ export function handleRedirectResult() {
   return getRedirectResult(auth);
 }
 
-const SSO_LOGOUT_FLOW_URL = 'https://sso.vps.totolol24.ovh/api/v3/flows/executor/default-invalidation-flow/';
+const SSO_END_SESSION_URL = 'https://sso.vps.totolol24.ovh/application/o/chat/end-session/';
 
 export async function logout() {
+  const idToken = localStorage.getItem(SSO_ID_TOKEN_KEY);
   localStorage.removeItem(SSO_ID_TOKEN_KEY);
-  try {
-    await fetch(SSO_LOGOUT_FLOW_URL, { mode: 'no-cors', credentials: 'include', cache: 'no-store' });
-  } catch (err) {
-    console.warn('Déconnexion SSO impossible', err);
-  }
   await signOut(auth);
+  const params = new URLSearchParams({
+    client_id: SSO_CLIENT_ID,
+    post_logout_redirect_uri: window.location.origin + window.location.pathname,
+  });
+  if (idToken) params.set('id_token_hint', idToken);
+  window.location.assign(`${SSO_END_SESSION_URL}?${params}`);
 }
 
 export function updateUserProfile(profile) {
