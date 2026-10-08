@@ -433,7 +433,7 @@ function renderMarkdown(raw) {
   s = s.replace(/&lt;t:(\d+)(?::([tTdDfFR]))?&gt;/g, (m, sec, fmt) => formatDiscordTs(Number(sec), fmt || 'f'));
   s = s.replace(new RegExp('\\n*(' + S + 'CB\\d+' + S + ')\\n*', 'g'), '$1');
   s = s.replace(/(<span class="md-li">[^\n]*<\/span>)\n+(?=<span class="md-li">)/g, '$1');
-  s = s.replace(/\n/g, '<br>');
+  s = s.replace(/\n/g, '<span class="md-break" aria-hidden="true"></span>');
   s = s.replace(new RegExp(S + 'L(\\d+)' + S, 'g'), (m, i) => links[+i]);
   s = s.replace(new RegExp(S + 'IC(\\d+)' + S, 'g'), (m, i) => `<code class="md-inline">${escapeHtml(inlineCodes[+i])}</code>`);
   s = s.replace(new RegExp(S + 'CB(\\d+)' + S, 'g'), (m, i) => {
