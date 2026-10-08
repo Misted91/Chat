@@ -35,9 +35,15 @@ ssoProvider.addScope('openid');
 ssoProvider.addScope('profile');
 ssoProvider.addScope('email');
 
+const SSO_CLIENT_ID = 'kPKnDXMtb2iX2WUvqYGVocGA9W4eUCHNgnVKJNC6';
+const SSO_ID_TOKEN_KEY = 'sso-id-token';
+
 export async function loginWithSso() {
   await setPersistence(auth, browserLocalPersistence);
-  return signInWithPopup(auth, ssoProvider);
+  const result = await signInWithPopup(auth, ssoProvider);
+  const credential = OAuthProvider.credentialFromResult(result);
+  if (credential && credential.idToken) localStorage.setItem(SSO_ID_TOKEN_KEY, credential.idToken);
+  return result;
 }
 
 export function handleRedirectResult() {
@@ -48,8 +54,14 @@ const SSO_END_SESSION_URL = 'https://sso.vps.totolol24.ovh/application/o/chat/en
 
 export async function logout() {
   await signOut(auth);
-  const back = encodeURIComponent(window.location.origin + window.location.pathname);
-  window.location.assign(`${SSO_END_SESSION_URL}?post_logout_redirect_uri=${back}`);
+  const params = new URLSearchParams({
+    client_id: SSO_CLIENT_ID,
+    post_logout_redirect_uri: window.location.origin + window.location.pathname,
+  });
+  const idToken = localStorage.getItem(SSO_ID_TOKEN_KEY);
+  if (idToken) params.set('id_token_hint', idToken);
+  localStorage.removeItem(SSO_ID_TOKEN_KEY);
+  window.location.assign(`${SSO_END_SESSION_URL}?${params}`);
 }
 
 export function updateUserProfile(profile) {
