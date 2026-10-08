@@ -762,8 +762,8 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
 .member__avatar .generated-avatar { width: 26px; height: 26px; font-size: 10px; }
 
 .bubble {
-  max-width: 68%;
-  padding: 9px 13px 13px;
+  max-width: 75%;
+  padding: 8px;
   border-radius: 14px;
   background: var(--bubble-other);
   font-size: 15px;
@@ -841,8 +841,6 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   display: block;
   font-size: 11px;
   color: var(--muted);
-  margin-bottom: 8px;
-  padding-right: 24px;
 }
 .bubble.me .meta { color: #dbe4ff; }
 .bubble.pinned { box-shadow: inset 0 0 0 1px var(--accent); }
@@ -856,11 +854,15 @@ body.sidebar-hidden .app { grid-template-columns: 1fr; }
   gap: 5px;
   position: relative;
   padding: 8px;
+  padding-top: 0px;
 }
 .bubble:not(.bubble--file):not(.bubble--img):not(.bubble--code):not(.bubble--video) .reactions {
   padding-left: 0;
   padding-right: 0;
   padding-bottom: 0;
+}
+.reactions .bubble--file, .reactions .bubble--img, .reactions .bubble--code, .reactions .bubble--video {
+  padding-top: 8px;
 }
 .reaction {
   display: inline-flex;

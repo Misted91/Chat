@@ -18,9 +18,10 @@ async function buildMapping() {
   do {
     const page = await auth.listUsers(1000, token);
     for (const u of page.users) {
-      const email = (u.email || '').toLowerCase();
+      const ssoInfo = u.providerData.find((p) => p.providerId === SSO_PROVIDER_ID);
+      const isSso = Boolean(ssoInfo);
+      const email = ((isSso ? ssoInfo.email : u.email) || u.email || '').toLowerCase();
       if (!email) continue;
-      const isSso = u.providerData.some((p) => p.providerId === SSO_PROVIDER_ID);
       (isSso ? newByEmail : oldByEmail).set(email, u.uid);
     }
     token = page.pageToken;
