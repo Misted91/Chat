@@ -114,8 +114,7 @@ function formatInviteCode(code) {
 }
 
 function inviteLink(code) {
-  const c = (code || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
-  return `${location.origin}${location.pathname}?join=${c}`;
+  return `${location.origin}${location.pathname}?join=${formatInviteCode(code)}`;
 }
 
 let currentUser = null;
