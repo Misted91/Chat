@@ -1,4 +1,4 @@
-const CACHE = 'chat-v1';
+const CACHE = 'chat-v2';
 const ASSETS = ['./', './index.html', './styles.css', './app.js', './store.js', './firebase.js', './manifest.json'];
 
 self.addEventListener('install', (e) => {
