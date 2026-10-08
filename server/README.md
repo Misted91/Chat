@@ -67,3 +67,17 @@ service), utiliser le chemin `/health` sur le port `3000` (ou `$PORT`).
   uniquement une URL `/file/:key` servie par ce proxy.
 - CORS restreint aux origines listées dans `ALLOWED_ORIGINS`.
 - Taille de fichier plafonnée par `MAX_FILE_SIZE_BYTES`.
+
+## Migration des UID vers le SSO Authentik
+
+Après la bascule vers `oidc.authentik`, chaque utilisateur doit se connecter une fois via le SSO (ce qui crée son nouveau compte Firebase). Le script associe ensuite ancien et nouveau compte par adresse e-mail, puis réécrit les UID dans Firestore (groupes, rôles, messages, réactions, sondages, membres, profils, invitations).
+
+```bash
+cd server
+export GOOGLE_APPLICATION_CREDENTIALS=/chemin/sa.json
+node migrate-uids.mjs                  # simulation
+node migrate-uids.mjs --apply          # écriture
+node migrate-uids.mjs --map=map.json   # correspondances manuelles {"ancienUid":"nouvelUid"}
+```
+
+Faire un export Firestore avant `--apply`. Le script est rejouable.

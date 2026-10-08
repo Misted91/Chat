@@ -1,11 +1,7 @@
 import { Store } from './store.js';
 import {
   auth,
-  loginWithGoogle,
-  loginWithGithub,
-  loginWithEmail,
-  createAccountWithEmail,
-  resetPasswordForEmail,
+  loginWithSso,
   logout,
   updateUserProfile,
   watchAuth,
@@ -146,12 +142,6 @@ let profilePromptOpen = false;
 
 const loginOverlay = document.getElementById('login-overlay');
 const loginBtn = document.getElementById('login-btn');
-const githubLoginBtn = document.getElementById('github-login-btn');
-const emailLoginForm = document.getElementById('email-login-form');
-const loginEmail = document.getElementById('login-email');
-const loginPassword = document.getElementById('login-password');
-const createAccountBtn = document.getElementById('create-account-btn');
-const resetPasswordBtn = document.getElementById('reset-password-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const userName = document.getElementById('user-name');
 const userAvatar = document.getElementById('user-avatar');
@@ -690,14 +680,9 @@ function appendAvatar(container, name, seed, photo, size) {
 
 function authErrorMessage(err) {
   if (err.code === 'auth/operation-not-allowed')
-    return "Cette méthode de connexion n'est pas activée dans Firebase.";
+    return "Le fournisseur SSO (oidc.authentik) n'est pas activé dans Firebase.";
   if (err.code === 'auth/unauthorized-domain')
     return "Ce domaine n'est pas autorisé dans Firebase.";
-  if (err.code === 'auth/email-already-in-use') return 'Cette adresse e-mail possède déjà un compte.';
-  if (err.code === 'auth/invalid-email') return "L'adresse e-mail n'est pas valide.";
-  if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found')
-    return 'Adresse e-mail ou mot de passe incorrect.';
-  if (err.code === 'auth/weak-password') return 'Le mot de passe doit contenir au moins 6 caractères.';
   if (err.code === 'auth/account-exists-with-different-credential')
     return 'Cette adresse utilise déjà une autre méthode de connexion.';
   if (err.code === 'auth/popup-closed-by-user') return 'La fenêtre de connexion a été fermée.';
@@ -830,58 +815,9 @@ handleRedirectResult().catch((err) => {
 
 loginBtn.addEventListener('click', async () => {
   try {
-    await loginWithGoogle();
+    await loginWithSso();
   } catch (err) {
     toast('Connexion impossible : ' + authErrorMessage(err));
-  }
-});
-
-githubLoginBtn.addEventListener('click', async () => {
-  try {
-    await loginWithGithub();
-  } catch (err) {
-    toast('Connexion impossible : ' + authErrorMessage(err));
-  }
-});
-
-emailLoginForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  try {
-    await loginWithEmail(loginEmail.value.trim(), loginPassword.value);
-  } catch (err) {
-    toast('Connexion impossible : ' + authErrorMessage(err));
-  }
-});
-
-createAccountBtn.addEventListener('click', async () => {
-  if (!emailLoginForm.reportValidity()) return;
-  try {
-    await createAccountWithEmail(loginEmail.value.trim(), loginPassword.value);
-  } catch (err) {
-    toast('Création du compte impossible : ' + authErrorMessage(err));
-  }
-});
-
-resetPasswordBtn.addEventListener('click', async () => {
-  const email = loginEmail.value.trim();
-  if (!email) {
-    toast('Saisis ton adresse e-mail pour recevoir le lien de réinitialisation.');
-    loginEmail.focus();
-    return;
-  }
-  if (!loginEmail.checkValidity()) {
-    loginEmail.reportValidity();
-    return;
-  }
-  try {
-    await resetPasswordForEmail(email);
-    toast('Si un compte correspond à cette adresse, un lien de réinitialisation a été envoyé.');
-  } catch (err) {
-    if (err.code === 'auth/user-not-found') {
-      toast('Si un compte correspond à cette adresse, un lien de réinitialisation a été envoyé.');
-      return;
-    }
-    toast('Envoi du lien impossible : ' + authErrorMessage(err));
   }
 });
 

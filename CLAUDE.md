@@ -122,7 +122,9 @@ manuellement : console Firebase → Firestore → Règles → coller `firestore.
 
 Après toute modif de `firestore.rules`, **republier**.
 
-## Console Firebase — activations requises (déjà faites)
+## Console Firebase — activations requises
+
+- Connexion : SSO Authentik via Firebase Authentication (Identity Platform) avec un fournisseur OpenID Connect d'ID `oidc.authentik`. Redirect URI Authentik : `https://chat-fd96b.firebaseapp.com/__/auth/handler`.
 
 - Authentication → Google activé ; domaines autorisés incluent
   `chat-fd96b.firebaseapp.com`, `chat-fd96b.web.app`.

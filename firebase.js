@@ -1,12 +1,8 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
 import {
   getAuth,
-  GoogleAuthProvider,
-  GithubAuthProvider,
+  OAuthProvider,
   signInWithPopup,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
   getRedirectResult,
   setPersistence,
   browserLocalPersistence,
@@ -33,31 +29,15 @@ export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
 });
 
-const provider = new GoogleAuthProvider();
-const githubProvider = new GithubAuthProvider();
+const SSO_PROVIDER_ID = 'oidc.authentik';
+const ssoProvider = new OAuthProvider(SSO_PROVIDER_ID);
+ssoProvider.addScope('openid');
+ssoProvider.addScope('profile');
+ssoProvider.addScope('email');
 
-export async function loginWithGoogle() {
+export async function loginWithSso() {
   await setPersistence(auth, browserLocalPersistence);
-  return signInWithPopup(auth, provider);
-}
-
-export async function loginWithGithub() {
-  await setPersistence(auth, browserLocalPersistence);
-  return signInWithPopup(auth, githubProvider);
-}
-
-export async function loginWithEmail(email, password) {
-  await setPersistence(auth, browserLocalPersistence);
-  return signInWithEmailAndPassword(auth, email, password);
-}
-
-export async function createAccountWithEmail(email, password) {
-  await setPersistence(auth, browserLocalPersistence);
-  return createUserWithEmailAndPassword(auth, email, password);
-}
-
-export function resetPasswordForEmail(email) {
-  return sendPasswordResetEmail(auth, email);
+  return signInWithPopup(auth, ssoProvider);
 }
 
 export function handleRedirectResult() {
