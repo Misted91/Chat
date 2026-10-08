@@ -48,7 +48,8 @@ const SSO_END_SESSION_URL = 'https://sso.vps.totolol24.ovh/application/o/chat/en
 
 export async function logout() {
   await signOut(auth);
-  window.location.assign(SSO_END_SESSION_URL);
+  const back = encodeURIComponent(window.location.origin + window.location.pathname);
+  window.location.assign(`${SSO_END_SESSION_URL}?post_logout_redirect_uri=${back}`);
 }
 
 export function updateUserProfile(profile) {
