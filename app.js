@@ -15,8 +15,16 @@ const UPLOAD_API_URL = 'https://chat.misted.vps.totolol24.ovh/upload';
 const UPLOAD_ORIGIN = new URL(UPLOAD_API_URL).origin;
 const UPLOAD_FEATURE_ENABLED = true;
 const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
+const MAX_MESSAGE_TEXT_LENGTH = 20000;
 
-const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🎉', '👌', '😁', '🫠', '😭', '🤯', '😱', '🥳', '🤡', '🐒', '👀', '🔥', '❤️', '❤️‍🔥', '❌', '❔', '❓', '⚠️', '❎', '✅', '🆗', '0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟', '☑️', '✔️', '🫦', '🤦', '💪', '🤏', '👈', '👉', '☝️', '🫵', '👆', '👇', '✌️', '🤞', '🖐️', '👍', '👎', '👋', '🙏', '✨'];
+const EMOJIS = [
+  '👍', '👎', '👌', '👋', '🙏', '💪', '🤏', '👈', '👉', '☝️', '🫵', '👆', '👇',
+  '✌️', '🤞', '🖐️', '🫦', '🤦',
+  '❤️', '❤️‍🔥', '😂', '😁', '😮', '😢', '😭', '🫠', '🤯', '😱', '🥳', '🤡',
+  '🐒', '👀', '🔥', '🎉', '✨',
+  '✅', '❌', '❎', '☑️', '✔️', '⚠️', '❔', '❓', '🆗',
+  '0️⃣', '1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟',
+].filter((emoji, index, emojis) => emojis.indexOf(emoji) === index);
 const PROFANITY = [
   'connard', 'connasse', 'salope', 'salaud', 'enculé', 'encule', 'enculer',
   'putain', 'pute', 'merde', 'batard', 'bâtard', 'nique', 'niquer', 'ntm',
@@ -355,7 +363,7 @@ function escapeHtml(s) {
 function formatDiscordTs(sec, fmt) {
   const d = new Date(sec * 1000);
   if (fmt === 'R') {
-    return `<span class="md-ts msg-time" data-ms="${d.getTime()}" title="${d.toLocaleString('fr-FR')}">${relativeTime(d)}</span>`;
+    return `<span class="md-ts msg-time" data-ms="${d.getTime()}" title="${formatMessageDate(d)}">${relativeTime(d)}</span>`;
   }
   let out;
   if (fmt === 't') out = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -370,6 +378,15 @@ function formatDiscordTs(sec, fmt) {
   return `<span class="md-ts">${out}</span>`;
 }
 
+function formatMessageDate(date) {
+  const dateText = date.toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  return `Posté le ${dateText} à ${date.getHours()}h${pad2(date.getMinutes())}`;
+}
+
 function renderMarkdown(raw) {
   const codeBlocks = [];
   const inlineCodes = [];
@@ -380,7 +397,10 @@ function renderMarkdown(raw) {
     let title, code;
     if (rest === undefined) { title = ''; code = first; }
     else { title = first.trim(); code = rest; }
-    code = code.replace(/^\n+/, '').replace(/\n+$/, '');
+    code = code
+      .replace(/\r\n?/g, '\n')
+      .replace(/^(?:[ \t]*\n)+/, '')
+      .replace(/(?:\n[ \t]*)+$/, '');
     codeBlocks.push({ code, title });
     return `${S}CB${codeBlocks.length - 1}${S}`;
   });
@@ -1144,17 +1164,11 @@ function buildBubble(msg, pos = {}) {
   const meta = document.createElement('span');
   meta.className = 'meta';
   const date = msg.ts && msg.ts.toDate ? msg.ts.toDate() : new Date();
-  bubble.title = date.toLocaleString('fr-FR');
+  bubble.title = formatMessageDate(date) + (msg.edited ? ' · Modifié' : '');
   if (showId) {
     const who = document.createElement('span');
     who.textContent = msg.authorName || 'Anonyme';
     meta.appendChild(who);
-  }
-  if (msg.edited) {
-    const ed = document.createElement('span');
-    ed.className = 'msg-edited';
-    ed.textContent = ' (modifié)';
-    meta.appendChild(ed);
   }
   if (msg.pinned) {
     const pinIcon = document.createElement('i');
@@ -1163,7 +1177,10 @@ function buildBubble(msg, pos = {}) {
     pinIcon.className = 'meta-pin';
     meta.appendChild(pinIcon);
   }
-  if (meta.childNodes.length) bubble.appendChild(meta);
+  if (meta.childNodes.length) {
+    bubble.classList.add('bubble--has-meta');
+    bubble.appendChild(meta);
+  }
 
   if (msg.replyTo) {
     const quote = document.createElement('button');
@@ -1261,15 +1278,9 @@ function buildBubble(msg, pos = {}) {
   });
   bubble.appendChild(reactRow);
 
-  const menuBtn = document.createElement('button');
-  menuBtn.type = 'button';
-  menuBtn.className = 'msg-menu-btn';
-  menuBtn.setAttribute('aria-label', 'Options du message');
-  menuBtn.innerHTML = '<i data-lucide="more-vertical" aria-hidden="true"></i>';
-
   const items = [];
   const addItem = (icon, label, handler) => items.push({ icon, label, handler });
-  addItem('smile-plus', 'Réagir', () => openReactionPicker(msg, menuBtn));
+  addItem('smile-plus', 'Réagir', () => openReactionPicker(msg, bubble));
   addItem('reply', 'Répondre', () => setReply(msg));
   if (msg.text) {
     addItem('copy', 'Copier', async () => {
@@ -1308,17 +1319,12 @@ function buildBubble(msg, pos = {}) {
       );
     });
   }
-  menuBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    openMessageMenu(items, menuBtn);
-  });
   bubble.addEventListener('contextmenu', (e) => {
     if (e.target.closest('a, textarea, input')) return;
     e.preventDefault();
-    openMessageMenu(items, menuBtn, { x: e.clientX, y: e.clientY });
+    openMessageMenu(items, bubble, { x: e.clientX, y: e.clientY });
   });
 
-  bubble.appendChild(menuBtn);
   row.appendChild(bubble);
   return row;
 }
@@ -1528,6 +1534,10 @@ function startEdit(msg, bubble, opts = {}) {
   save.addEventListener('click', async () => {
     const v = ta.value.trim();
     if (!v) { toast('Le message ne peut pas être vide.'); return; }
+    if (v.length > MAX_MESSAGE_TEXT_LENGTH) {
+      toast(`Le message dépasse la limite de ${MAX_MESSAGE_TEXT_LENGTH.toLocaleString('fr-FR')} caractères.`);
+      return;
+    }
     editing = null;
     try {
       await Store.editMessage(currentGroupId, msg.id, v);
@@ -2530,12 +2540,17 @@ function sendMediaUrl(url) {
   }
   const clean = url.trim();
   if (!/^https:\/\//i.test(clean)) { toast('URL invalide (https requis).'); return; }
+  const text = messageInput.value.trim();
+  if (text.length > MAX_MESSAGE_TEXT_LENGTH) {
+    toast(`Le message dépasse la limite de ${MAX_MESSAGE_TEXT_LENGTH.toLocaleString('fr-FR')} caractères.`);
+    return;
+  }
   Store.addMessage(currentGroupId, {
-    text: messageInput.value.trim(),
+    text,
     image: clean,
     user: currentUser,
     reply: replyingTo,
-    mentions: [...new Set([...messageMentions(messageInput.value.trim()), ...replyMentions()])],
+    mentions: [...new Set([...messageMentions(text), ...replyMentions()])],
   })
     .then(() => { messageInput.value = ''; mentionEnabled = true; updateMentionToggle(); clearReply(); messagesEl.scrollTop = messagesEl.scrollHeight; })
     .catch((err) => toast('Envoi impossible : ' + err.message));
@@ -2571,6 +2586,10 @@ composer.addEventListener('submit', async (e) => {
 
   if (!canPostIn(group)) {
     toast(isMutedIn(group) ? 'Tu es muet dans ce groupe.' : 'Le chat est bloqué.');
+    return;
+  }
+  if (text.length > MAX_MESSAGE_TEXT_LENGTH) {
+    toast(`Le message dépasse la limite de ${MAX_MESSAGE_TEXT_LENGTH.toLocaleString('fr-FR')} caractères.`);
     return;
   }
 
