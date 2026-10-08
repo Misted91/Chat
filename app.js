@@ -820,7 +820,14 @@ loginBtn.addEventListener('click', async () => {
   }
 });
 
-logoutBtn.addEventListener('click', () => logout());
+let loggingOut = false;
+logoutBtn.addEventListener('click', () => {
+  loggingOut = true;
+  logout().catch((err) => {
+    loggingOut = false;
+    toast('Déconnexion impossible : ' + err.message);
+  });
+});
 
 sidebarToggle.addEventListener('click', () => {
   document.body.classList.toggle('sidebar-hidden');
@@ -850,7 +857,7 @@ watchAuth((user) => {
     handleJoinParam();
     maybeOpenProfilePrompt(user);
   } else {
-    loginOverlay.hidden = false;
+    loginOverlay.hidden = loggingOut;
     logoutBtn.hidden = true;
     notifBtn.hidden = true;
     userAvatar.hidden = true;
