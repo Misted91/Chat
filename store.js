@@ -61,6 +61,15 @@ export const Store = {
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
 
+  async needsProfileSetup(uid, version) {
+    const snap = await getDoc(doc(db, 'profiles', uid));
+    return !snap.exists() || snap.data().version !== version;
+  },
+
+  async completeProfileSetup(uid, version) {
+    return setDoc(doc(db, 'profiles', uid), { version }, { merge: true });
+  },
+
   watchMessages(groupId, limitCount, callback, onError) {
     const q = query(
       collection(db, 'groups', groupId, 'messages'),
@@ -101,6 +110,12 @@ export const Store = {
     });
 
     await setDoc(doc(db, 'invites', code), { groupId: ref.id, createdBy: user.uid });
+    await setDoc(doc(db, 'groups', ref.id, 'members', user.uid), {
+      uid: user.uid,
+      name: user.displayName || 'Anonyme',
+      photo: user.photoURL || '',
+      joinedAt: serverTimestamp(),
+    });
     return ref;
   },
 
@@ -244,6 +259,18 @@ export const Store = {
         name: user.displayName || 'Anonyme',
         photo: user.photoURL || '',
         joinedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  },
+
+  async updateMemberProfile(groupId, user) {
+    return setDoc(
+      doc(db, 'groups', groupId, 'members', user.uid),
+      {
+        uid: user.uid,
+        name: user.displayName || 'Anonyme',
+        photo: user.photoURL || '',
       },
       { merge: true }
     );

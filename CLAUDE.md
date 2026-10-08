@@ -30,12 +30,12 @@ la connexion Google (popup) fonctionne sans blocage cross-domaine.
 | `firebase.js` | Init Firebase (auth Google + Firestore en long-polling forcé) |
 | `firestore.rules` | Règles de sécurité (source de vérité, à publier — voir plus bas) |
 | `manifest.json`, `sw.js`, `icon-192/512.png` | PWA (installable, service worker cache-first-réseau) |
-| `lucide.min.js` | Lucide **auto-hébergé** (v0.294.0, chargé avec `integrity`/SRI) |
+| ReIcon CDN | Icônes d'interface ReIcon chargées dans `index.html` et rendues avec `<re-icon>` |
 | `README.md` | Doc utilisateur courte |
 | `server/` | Service Node/Express séparé (déployé sur Coolify) qui upload les images vers Mega S4 |
 
-Chargement : `index.html` charge `lucide.min.js` (classique) puis `app.js`
-(module) ; `app.js` importe `store.js` et `firebase.js`.
+Chargement : `index.html` charge le composant ReIcon puis `app.js` (module) ;
+`app.js` importe `store.js` et `firebase.js`.
 
 ## Contraintes de code (à respecter)
 

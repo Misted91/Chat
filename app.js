@@ -7,6 +7,7 @@ import {
   createAccountWithEmail,
   resetPasswordForEmail,
   logout,
+  updateUserProfile,
   watchAuth,
   handleRedirectResult,
 } from './firebase.js';
@@ -16,6 +17,48 @@ const UPLOAD_ORIGIN = new URL(UPLOAD_API_URL).origin;
 const UPLOAD_FEATURE_ENABLED = true;
 const MAX_UPLOAD_SIZE = 15 * 1024 * 1024;
 const MAX_MESSAGE_TEXT_LENGTH = 20000;
+const PROFILE_PROMPT_VERSION = '1';
+const REICON_ALIASES = {
+  'bar-chart-3': 'chart-bar',
+  github: 'code',
+  'image-off': 'image',
+  languages: 'translate',
+  'log-in': 'login',
+  'log-out': 'logout',
+  'panel-left': 'menu',
+  'party-popper': 'sparkles',
+  pencil: 'edit',
+  'share-2': 'share',
+  'smile-plus': 'face-smile',
+  'trash-2': 'trash',
+  'user-round': 'user',
+};
+const warnedReIconNames = new Set();
+
+function resolveReIconName(requestedName, location = 'app.js') {
+  const requested = String(requestedName || 'file');
+  const iconName = REICON_ALIASES[requested] || requested;
+  const availableIcons = globalThis.Reicon?.icons;
+  if (Array.isArray(availableIcons) && !availableIcons.includes(iconName)) {
+    const warningKey = `${location}:${requested}`;
+    if (!warnedReIconNames.has(warningKey)) {
+      warnedReIconNames.add(warningKey);
+      console.warn(`[ReIcon] Icône inexistante "${requested}" (résolue vers "${iconName}") dans ${location}.`);
+    }
+    return 'help';
+  }
+  return iconName;
+}
+
+function createReIcon(requestedName, location = 'app.js', size) {
+  const icon = document.createElement('re-icon');
+  icon.setAttribute('icon', resolveReIconName(requestedName, location));
+  icon.setAttribute('weight', 'filled');
+  icon.setAttribute('secondary-color', 'currentColor');
+  if (size) icon.setAttribute('size', String(size));
+  icon.setAttribute('decorative', '');
+  return icon;
+}
 
 const EMOJIS = [
   '👍', '👎', '👌', '👋', '🙏', '💪', '🤏', '👈', '👉', '☝️', '🫵', '👆', '👇',
@@ -97,6 +140,9 @@ let msgHasMore = false;
 let loadingMore = false;
 let editing = null;
 const expandedSys = new Set();
+let profilePhotoFile = null;
+let profilePreviewUrl = null;
+let profilePromptOpen = false;
 
 const loginOverlay = document.getElementById('login-overlay');
 const loginBtn = document.getElementById('login-btn');
@@ -122,6 +168,12 @@ const createCancel = document.getElementById('create-cancel');
 const createForm = document.getElementById('create-form');
 const createName = document.getElementById('create-name');
 const createVisibility = document.getElementById('create-visibility');
+const profileOverlay = document.getElementById('profile-overlay');
+const profileForm = document.getElementById('profile-form');
+const profileName = document.getElementById('profile-name');
+const profilePhotoInput = document.getElementById('profile-photo-input');
+const profilePhotoPreview = document.getElementById('profile-photo-preview');
+const profilePhotoPlaceholder = document.getElementById('profile-photo-placeholder');
 const joinOverlay = document.getElementById('join-overlay');
 const joinClose = document.getElementById('join-close');
 const joinCancel = document.getElementById('join-cancel');
@@ -576,8 +628,64 @@ function relativeTime(date) {
   return date.toLocaleDateString('fr-FR');
 }
 
-function initials(name) {
-  return (name || '?').trim().charAt(0).toUpperCase();
+function avatarInitials(name) {
+  const words = (name || 'Utilisateur')
+    .trim()
+    .replace(/[._-]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!words.length) return 'U';
+  if (words.length === 1) return Array.from(words[0]).slice(0, 2).join('').toUpperCase() || 'U';
+  return `${Array.from(words[0])[0]}${Array.from(words[1])[0]}`.toUpperCase();
+}
+
+function avatarHash(value) {
+  let hash = 0;
+  for (const char of value) hash = ((hash << 5) - hash + char.codePointAt(0)) | 0;
+  return Math.abs(hash);
+}
+
+function generatedAvatarStyle(name, seed = '') {
+  const initials = avatarInitials(name);
+  const hash = avatarHash(`${seed}:${name}`);
+  const hueA = hash % 360;
+  const hueB = (hueA + 45 + hash % 65) % 360;
+  return { initials, background: `linear-gradient(135deg, hsl(${hueA} 70% 52%), hsl(${hueB} 66% 38%))` };
+}
+
+function setAvatarImage(image, name, seed, photo = '') {
+  const fallback = image.nextElementSibling;
+  const generated = generatedAvatarStyle(name, seed);
+  if (fallback?.classList.contains('generated-avatar')) {
+    fallback.textContent = generated.initials;
+    fallback.style.background = generated.background;
+  }
+  image.hidden = !photo;
+  if (!photo) {
+    if (fallback?.classList.contains('generated-avatar')) fallback.hidden = false;
+    return;
+  }
+  if (fallback?.classList.contains('generated-avatar')) fallback.hidden = true;
+  image.src = photo;
+  image.addEventListener('error', () => {
+    image.hidden = true;
+    if (fallback?.classList.contains('generated-avatar')) fallback.hidden = false;
+  }, { once: true });
+}
+
+function appendAvatar(container, name, seed, photo, size) {
+  const image = document.createElement('img');
+  image.width = size;
+  image.height = size;
+  image.loading = 'lazy';
+  image.decoding = 'async';
+  image.referrerPolicy = 'no-referrer';
+  image.alt = '';
+  const generated = document.createElement('span');
+  generated.className = 'generated-avatar';
+  generated.setAttribute('aria-hidden', 'true');
+  container.append(image, generated);
+  setAvatarImage(image, name, seed, photo);
 }
 
 function authErrorMessage(err) {
@@ -597,6 +705,124 @@ function authErrorMessage(err) {
   if (err.code === 'auth/too-many-requests') return 'Trop de tentatives. Réessaie plus tard.';
   return err.message;
 }
+
+function updateUserHeader(user) {
+  userName.textContent = user.displayName || 'Utilisateur';
+  if (!userAvatar.nextElementSibling?.classList.contains('generated-avatar')) {
+    const generated = document.createElement('span');
+    generated.className = 'generated-avatar user__avatar';
+    generated.setAttribute('aria-hidden', 'true');
+    userAvatar.after(generated);
+  }
+  setAvatarImage(userAvatar, user.displayName || defaultProfileName(user), user.uid, user.photoURL);
+}
+
+function usesProfilePrompt(user) {
+  const providerIds = (user.providerData || []).map((provider) => provider.providerId);
+  return providerIds.some((providerId) => providerId === 'github.com' || providerId === 'password');
+}
+
+function defaultProfileName(user) {
+  return user.displayName || (user.email || '').split('@')[0] || 'Utilisateur';
+}
+
+function clearProfilePhotoPreview() {
+  if (profilePreviewUrl) URL.revokeObjectURL(profilePreviewUrl);
+  profilePreviewUrl = null;
+  profilePhotoPreview.hidden = true;
+  profilePhotoPreview.removeAttribute('src');
+  profilePhotoPlaceholder.hidden = false;
+}
+
+function openProfilePrompt(user) {
+  profilePromptOpen = true;
+  profilePhotoFile = null;
+  profilePhotoInput.value = '';
+  clearProfilePhotoPreview();
+  if (user.photoURL) {
+    setAvatarImage(profilePhotoPreview, defaultProfileName(user), user.uid, user.photoURL);
+    profilePhotoPreview.hidden = false;
+    profilePhotoPlaceholder.hidden = true;
+  }
+  profileName.value = defaultProfileName(user);
+  profileOverlay.hidden = false;
+  profileName.focus();
+  refreshIcons();
+}
+
+async function syncProfileToMemberGroups(user) {
+  const memberGroupsForProfile = await Store.getMemberGroupsOnce(user.uid);
+  const groupIds = [...new Set(memberGroupsForProfile.map((group) => group.id))];
+  if (!groupIds.length) return;
+  await Promise.all(groupIds.map((groupId) => Store.updateMemberProfile(groupId, user)));
+}
+
+async function maybeOpenProfilePrompt(user) {
+  if (profilePromptOpen || !usesProfilePrompt(user)) return;
+  try {
+    const needsSetup = await Store.needsProfileSetup(user.uid, PROFILE_PROMPT_VERSION);
+    if (currentUser && currentUser.uid === user.uid && needsSetup) openProfilePrompt(user);
+  } catch (err) {
+    toast('Vérification du profil impossible : ' + err.message);
+  }
+}
+
+profilePhotoInput.addEventListener('change', () => {
+  const [file] = profilePhotoInput.files || [];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    toast('Choisis un fichier image.');
+    profilePhotoInput.value = '';
+    return;
+  }
+  if (file.size > MAX_UPLOAD_SIZE) {
+    toast(`La photo dépasse la taille max (${Math.round(MAX_UPLOAD_SIZE / 1024 / 1024)} Mo).`);
+    profilePhotoInput.value = '';
+    return;
+  }
+  clearProfilePhotoPreview();
+  profilePhotoFile = file;
+  profilePreviewUrl = URL.createObjectURL(file);
+  profilePhotoPreview.src = profilePreviewUrl;
+  profilePhotoPreview.hidden = false;
+  profilePhotoPlaceholder.hidden = true;
+});
+
+profileForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!currentUser) return;
+  const displayName = profileName.value.trim();
+  if (!displayName) {
+    profileName.focus();
+    return;
+  }
+  const submit = profileForm.elements.namedItem('profile-submit');
+  submit.disabled = true;
+  try {
+    let photoURL = currentUser.photoURL || '';
+    if (profilePhotoFile) {
+      const compressed = await compressImage(profilePhotoFile, 512, 260000);
+      const photoBlob = await (await fetch(compressed.url)).blob();
+      photoURL = await uploadToMega(photoBlob, 'profile.webp', 'profiles');
+    }
+    await updateUserProfile({ displayName, photoURL });
+    currentUser = auth.currentUser;
+    updateUserHeader(currentUser);
+    await Store.completeProfileSetup(currentUser.uid, PROFILE_PROMPT_VERSION);
+    profileOverlay.hidden = true;
+    profilePromptOpen = false;
+    clearProfilePhotoPreview();
+    try {
+      await syncProfileToMemberGroups(currentUser);
+    } catch (err) {
+      toast('Profil enregistré, mais synchronisation des groupes impossible : ' + err.message);
+    }
+  } catch (err) {
+    toast('Mise à jour du profil impossible : ' + err.message);
+  } finally {
+    submit.disabled = false;
+  }
+});
 
 handleRedirectResult().catch((err) => {
   toast('Connexion impossible : ' + authErrorMessage(err));
@@ -681,22 +907,23 @@ watchAuth((user) => {
   currentUser = user;
   if (user) {
     loginOverlay.hidden = true;
-    userName.textContent = user.displayName || 'Utilisateur';
-    if (user.photoURL) {
-      userAvatar.src = user.photoURL;
-      userAvatar.hidden = false;
-    }
+    updateUserHeader(user);
     logoutBtn.hidden = false;
     notifBtn.hidden = false;
     restored = false;
     startGroupsListeners();
     handleJoinParam();
+    maybeOpenProfilePrompt(user);
   } else {
     loginOverlay.hidden = false;
     logoutBtn.hidden = true;
     notifBtn.hidden = true;
     userAvatar.hidden = true;
+    userAvatar.removeAttribute('src');
     userName.textContent = '';
+    profileOverlay.hidden = true;
+    profilePromptOpen = false;
+    clearProfilePhotoPreview();
     stopGroupsListeners();
     resetChat();
     groupList.innerHTML = '';
@@ -927,6 +1154,7 @@ async function selectGroup(id) {
   if (unsubMembers) unsubMembers();
   unsubMembers = Store.watchMembers(id, (members) => {
     currentMembers = members;
+    if (currentMessages.length) renderMessages();
     if (!adminOverlay.hidden) renderAdminPanel();
   });
 
@@ -1125,6 +1353,9 @@ function buildBubble(msg, pos = {}) {
   }
 
   const isMe = currentUser && msg.author === currentUser.uid;
+  const member = currentMembers.find((entry) => entry.uid === msg.author);
+  const authorName = member?.name || msg.authorName || 'Anonyme';
+  const authorPhoto = member?.photo || msg.authorPhoto || '';
   const first = pos.first !== false;
   const last = pos.last !== false;
   const showId = first;
@@ -1136,19 +1367,7 @@ function buildBubble(msg, pos = {}) {
   const avatar = document.createElement('div');
   avatar.className = 'msg-avatar' + (showId ? '' : ' spacer');
   if (showId) {
-    if (msg.authorPhoto) {
-      const im = document.createElement('img');
-      im.width = 30;
-      im.height = 30;
-      im.loading = 'lazy';
-      im.decoding = 'async';
-      im.referrerPolicy = 'no-referrer';
-      im.src = msg.authorPhoto;
-      im.alt = '';
-      avatar.appendChild(im);
-    } else {
-      avatar.textContent = initials(msg.authorName);
-    }
+    appendAvatar(avatar, authorName, msg.author, authorPhoto, 30);
   }
   row.appendChild(avatar);
 
@@ -1167,7 +1386,7 @@ function buildBubble(msg, pos = {}) {
   bubble.title = formatMessageDate(date) + (msg.edited ? ' · Modifié' : '');
   if (showId) {
     const who = document.createElement('span');
-    who.textContent = msg.authorName || 'Anonyme';
+    who.textContent = authorName;
     meta.appendChild(who);
   }
   if (msg.pinned) {
@@ -1348,9 +1567,7 @@ function buildBrokenImage(src) {
 function buildFileCard(msg) {
   const card = document.createElement('div');
   card.className = 'bubble-file';
-  const icon = document.createElement('i');
-  icon.setAttribute('data-lucide', 'file');
-  icon.setAttribute('aria-hidden', 'true');
+  const icon = createReIcon(fileIconName(msg.fileName, msg.fileType), 'app.js:buildFileCard', 20);
   const info = document.createElement('div');
   info.className = 'bubble-file__info';
   const name = document.createElement('span');
@@ -1370,12 +1587,37 @@ function buildFileCard(msg) {
   dl.target = '_blank';
   dl.rel = 'noopener noreferrer';
   dl.setAttribute('aria-label', 'Télécharger');
-  dl.innerHTML = '<i data-lucide="download" aria-hidden="true"></i>';
+  const downloadIcon = createReIcon('download', 'app.js:buildFileCard download', 18);
+  dl.appendChild(downloadIcon);
   card.appendChild(icon);
   card.appendChild(info);
   card.appendChild(dl);
   refreshIcons();
   return card;
+}
+
+function fileIconName(fileName = '', fileType = '') {
+  const mimeIcons = {
+    'application/c++': 'code-file',
+    'text/x-c++src': 'code-file',
+    'text/html': 'code-file',
+    'text/css': 'code-file',
+    'application/javascript': 'code-file',
+    'text/javascript': 'code-file',
+    'application/json': 'code-file',
+    'text/markdown': 'file-text',
+    'text/x-python': 'code-file',
+    'application/x-python-code': 'code-file',
+    'text/x-java-source': 'code-file',
+    'application/xml': 'code-file',
+  };
+  if (mimeIcons[fileType]) return mimeIcons[fileType];
+  const extension = fileName.toLowerCase().split('.').pop();
+  return {
+    cpp: 'code-file', cxx: 'code-file', h: 'code-file', hpp: 'code-file',
+    html: 'code-file', htm: 'code-file', css: 'code-file', js: 'code-file', mjs: 'code-file',
+    ts: 'code-file', json: 'code-file', md: 'file-text', py: 'code-file', java: 'code-file', xml: 'code-file',
+  }[extension] || 'file';
 }
 
 
@@ -1424,6 +1666,7 @@ function openReactionPicker(msg, anchor) {
   EMOJIS.forEach((emoji) => {
     const b = document.createElement('button');
     b.type = 'button';
+    b.setAttribute('aria-label', `Réagir avec ${emoji}`);
     b.textContent = emoji;
     b.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -1611,8 +1854,18 @@ function buildPoll(msg) {
   return wrap;
 }
 
-function refreshIcons() {
-  if (window.lucide) window.lucide.createIcons();
+function refreshIcons(location = 'app.js') {
+  document.querySelectorAll('[data-lucide]').forEach((source) => {
+    const requestedIcon = source.getAttribute('data-lucide');
+    const elementLocation = source.id
+      ? `${location}#${source.id}`
+      : `${location} <${source.tagName.toLowerCase()} class="${source.className || ''}">`;
+    const icon = createReIcon(requestedIcon, elementLocation);
+    for (const attribute of source.attributes) {
+      if (attribute.name !== 'data-lucide') icon.setAttribute(attribute.name, attribute.value);
+    }
+    source.replaceWith(icon);
+  });
 }
 
 let pendingRestore = null;
@@ -2024,19 +2277,7 @@ function renderMembers(group) {
     idcol.className = 'member__id';
     const av = document.createElement('span');
     av.className = 'member__avatar';
-    if (m.photo) {
-      const im = document.createElement('img');
-      im.width = 26;
-      im.height = 26;
-      im.loading = 'lazy';
-      im.decoding = 'async';
-      im.referrerPolicy = 'no-referrer';
-      im.src = m.photo;
-      im.alt = '';
-      av.appendChild(im);
-    } else {
-      av.textContent = initials(m.name);
-    }
+    appendAvatar(av, m.name || 'Anonyme', m.uid, m.photo, 26);
     const name = document.createElement('span');
     name.textContent = m.name || 'Anonyme';
     idcol.appendChild(av);
@@ -2221,6 +2462,7 @@ deleteBtn.addEventListener('click', async () => {
   if (!group) return;
   const ok = await confirmModal(`Supprimer le groupe « ${group.name} » ?`);
   if (!ok) return;
+  adminOverlay.hidden = true;
   try {
     const groupId = currentGroupId;
     await Store.deleteGroup(currentGroupId, group.joinCode);
@@ -2435,11 +2677,11 @@ previewOverlay.addEventListener('click', (e) => {
   if (e.target === previewOverlay) closePreview();
 });
 
-async function uploadToMega(blob, filename) {
+async function uploadToMega(blob, filename, groupId = currentGroupId) {
   const token = currentUser && (await currentUser.getIdToken());
   const fd = new FormData();
   fd.append('file', blob, filename);
-  fd.append('groupId', currentGroupId);
+  fd.append('groupId', groupId);
   const res = await fetch(UPLOAD_API_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
@@ -3109,7 +3351,7 @@ pollForm.addEventListener('submit', async (e) => {
   }
 });
 
-refreshIcons();
+refreshIcons('index.html');
 updateNotifButton();
 
 setInterval(() => {

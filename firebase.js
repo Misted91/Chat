@@ -12,6 +12,7 @@ import {
   browserLocalPersistence,
   signOut,
   onAuthStateChanged,
+  updateProfile,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-auth.js';
 import { initializeFirestore } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
@@ -65,6 +66,11 @@ export function handleRedirectResult() {
 
 export function logout() {
   return signOut(auth);
+}
+
+export function updateUserProfile(profile) {
+  if (!auth.currentUser) throw new Error('Utilisateur non connecté.');
+  return updateProfile(auth.currentUser, profile);
 }
 
 export function watchAuth(callback) {

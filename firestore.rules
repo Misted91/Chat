@@ -7,6 +7,11 @@ service cloud.firestore {
 
     function isSignedIn() { return request.auth != null; }
 
+    match /profiles/{uid} {
+      allow read, create, update: if isSignedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['version']);
+    }
+
     // Codes d'invitation (lisibles par tout utilisateur connecté pour rejoindre).
     match /invites/{code} {
       allow read: if isSignedIn();
